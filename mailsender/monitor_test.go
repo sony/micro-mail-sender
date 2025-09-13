@@ -68,7 +68,9 @@ func (m *TestMonitor) runSmtpBackground(addr string) error {
 		<-m.smtpdStopper
 		l.Close()
 	}()
-	go m.smtpd.Serve(l)
+	go func() {
+		_ = m.smtpd.Serve(l)
+	}()
 	return nil
 }
 
