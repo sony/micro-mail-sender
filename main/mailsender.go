@@ -5,12 +5,11 @@ import (
 	"log"
 	"os"
 
-	"mailsender/mailsender"
+	"github.com/sony/micro-mail-sender/mailsender"
 )
 
 func main() {
-	pstandalone := flag.Bool("standalone", false,
-		"Invoke necessary daemons")
+	pstandalone := flag.Bool("standalone", false, "Invoke necessary daemons")
 
 	flag.Parse()
 
