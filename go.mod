@@ -1,4 +1,4 @@
-module mailsender
+module github.com/sony/micro-mail-sender
 
 go 1.23
 
