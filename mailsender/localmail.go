@@ -2,7 +2,7 @@ package mailsender
 
 import (
 	"bytes"
-	"io/ioutil"
+	"io"
 	"net/mail"
 	"os/exec"
 	"regexp"
@@ -45,7 +45,7 @@ func fetchLocalMail(app *App) (data []byte, rerr error) {
 		rerr = appendError(rerr, cmd.Wait())
 	}()
 
-	out, err := ioutil.ReadAll(stdout)
+	out, err := io.ReadAll(stdout)
 	if err != nil {
 		return nil, appendError(rerr, err)
 	}
@@ -111,7 +111,7 @@ func getFailedMessageId(app *App, msg *mail.Message) string {
 
 	// The original message id is in one of the MIME parts.  For now,
 	// we assume there's no other parts that contains Message-ID header.
-	body, err := ioutil.ReadAll(msg.Body)
+	body, err := io.ReadAll(msg.Body)
 	if err != nil {
 		app.logger.Debugw("Failed to read message body",
 			"err", err)

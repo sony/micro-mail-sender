@@ -1,7 +1,7 @@
 package mailsender
 
 import (
-	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -11,7 +11,7 @@ func TestGetFailedMessageId(t *testing.T) {
 	config, _ := ParseConfig(`{"host":"localhost"}`)
 	app := newApp(config)
 
-	testmsg, err := ioutil.ReadFile("../testdata/localmail1.txt")
+	testmsg, err := os.ReadFile("../testdata/localmail1.txt")
 	require.Nil(t, err)
 
 	msg, err := parseLocalMail(app, testmsg)

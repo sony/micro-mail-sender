@@ -84,10 +84,12 @@ func (a *TestApp) runSmtpdBackground(addr string) error {
 
 	go func() {
 		defer close(a.smtpdStopper)
-		_ = <-a.smtpdStopper
+		<-a.smtpdStopper
 		l.Close()
 	}()
-	go a.smtpd.Serve(l)
+	go func() {
+		_ = a.smtpd.Serve(l)
+	}()
 	return nil
 }
 

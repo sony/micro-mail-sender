@@ -624,7 +624,6 @@ func (m *Message) getSingleContent(p Personalization, buf *bytes.Buffer) {
 	buf.WriteString("\r\n")
 
 	buf.WriteString(c.Value)
-	return
 }
 
 func (m *Message) getMessageBody() ([]byte, error) {

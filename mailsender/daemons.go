@@ -2,8 +2,8 @@ package mailsender
 
 import (
 	"fmt"
-	"io/ioutil"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"time"
@@ -43,7 +43,7 @@ func runSyslog(sugar *zap.SugaredLogger) bool {
 }
 
 func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
-	err := ioutil.WriteFile(PostOrigin, []byte(config.MyDomain), 0644)
+	err := os.WriteFile(PostOrigin, []byte(config.MyDomain), 0644)
 	if err != nil {
 		sugar.Errorw("Cannot set up mailname",
 			"path", PostOrigin,
@@ -51,7 +51,7 @@ func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
 		return false
 	}
 
-	content, err := ioutil.ReadFile(PostConfigOrig)
+	content, err := os.ReadFile(PostConfigOrig)
 	if err != nil {
 		sugar.Errorw("Cannot read mail.cf.orig",
 			"path", PostConfigOrig,
@@ -64,7 +64,7 @@ func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
 		edited = regexp.MustCompile(`relayhost = `).ReplaceAllString(edited, fmt.Sprintf("relayhost = %s", config.RelayHost))
 	}
 	if config.RelayUser != "" {
-		if err = ioutil.WriteFile(SaslPasswd, []byte(fmt.Sprintf("%s %s:%s\n", config.RelayHost, config.RelayUser, config.RelayPass)), 0600); err != nil {
+		if err = os.WriteFile(SaslPasswd, []byte(fmt.Sprintf("%s %s:%s\n", config.RelayHost, config.RelayUser, config.RelayPass)), 0600); err != nil {
 			sugar.Errorw("Cannot write sasl_passwd",
 				"path", SaslPasswd,
 				"error", err)
@@ -85,7 +85,7 @@ func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
 		edited += fmt.Sprintf("%s = %s\n", key, value)
 	}
 
-	err = ioutil.WriteFile(PostConfig, []byte(edited), 0644)
+	err = os.WriteFile(PostConfig, []byte(edited), 0644)
 	if err != nil {
 		sugar.Errorw("Cannot write mail.cf",
 			"path", PostConfig,

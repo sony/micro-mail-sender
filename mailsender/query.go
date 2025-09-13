@@ -70,7 +70,7 @@ var validQueryKinds = []string{
 var validOperators = []string{"^=", "^!="}
 
 func skipws(input string) string {
-	idx := regexp.MustCompile("\\s*").FindStringIndex(input)
+	idx := regexp.MustCompile(`\s*`).FindStringIndex(input)
 	return input[idx[1]:]
 
 }
