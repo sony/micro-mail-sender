@@ -1,3 +1,5 @@
+//go:build integration
+
 package mailsender
 
 import (
@@ -6,8 +8,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSendMessage(t *testing.T) {
-	tapp := initTestBase(t, nil)
+func TestSendMessageSuccess(t *testing.T) {
+	tapp := initTestBase(t, &TestConfig{smtpError: false})
 	defer tapp.Fini()
 
 	mes := Message{
@@ -29,7 +31,7 @@ func TestSendMessage(t *testing.T) {
 		`Subject: test mail`+"\n"+
 		"\n"+
 		`This is a test mail body`+"\n",
-		removeMessageIdFromText(string(tapp.sentMails[0].Data)))
+		removeMessageIDFromText(string(tapp.sentMails[0].Data)))
 }
 
 func TestSendMessageError(t *testing.T) {

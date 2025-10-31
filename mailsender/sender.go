@@ -2,9 +2,8 @@ package mailsender
 
 import (
 	"fmt"
+	"net/smtp"
 	"time"
-
-	smtp "github.com/emersion/go-smtp"
 )
 
 func senderLoop(app *App) {
@@ -34,7 +33,7 @@ func runSenderLoop(app *App) {
 }
 
 func sendMesg(app *App, m *Message) error {
-	smtpserver := fmt.Sprintf("localhost:%d", app.config.SmtpPort)
+	smtpserver := fmt.Sprintf("localhost:%d", app.config.SMTPPort)
 	err := sendLocal(smtpserver, m)
 	if err != nil {
 		e := m.abandonMessage(app, err.Error())
@@ -61,7 +60,7 @@ func sendLocal(smtpserver string, m *Message) (rerr error) {
 		return err
 	}
 	defer func() {
-		rerr = appendError(rerr, clnt.Close())
+		rerr = appendError(rerr, clnt.Quit())
 	}()
 
 	err = clnt.Hello("localhost")
@@ -69,7 +68,7 @@ func sendLocal(smtpserver string, m *Message) (rerr error) {
 		return err
 	}
 
-	err = clnt.Mail(m.packet.From.Email, nil)
+	err = clnt.Mail(m.packet.From.Email)
 	if err != nil {
 		return err
 	}
@@ -106,5 +105,5 @@ func sendLocal(smtpserver string, m *Message) (rerr error) {
 	if err != nil {
 		return err
 	}
-	return clnt.Quit()
+	return
 }

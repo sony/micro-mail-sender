@@ -9,10 +9,6 @@ github.com/chrj/smtpd v0.3.1/go.mod h1:JtABvV/LzvLmEIzy0NyDnrfMGOMd8wy5frAokwf6J
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/emersion/go-sasl v0.0.0-20190817083125-240c8404624e h1:ba7YsgX5OV8FjGi5ZWml8Jng6oBrJAb3ahqWMJ5Ce8Q=
-github.com/emersion/go-sasl v0.0.0-20190817083125-240c8404624e/go.mod h1:G/dpzLu16WtQpBfQ/z3LYiYJn3ZhKSGWn83fyoyQe/k=
-github.com/emersion/go-smtp v0.12.1 h1:1R8BDqrR2HhlGwgFYcOi+BVTvK1bMjAB65QcVpJ5sNA=
-github.com/emersion/go-smtp v0.12.1/go.mod h1:SD9V/xa4ndMw77lR3Mf7htkp8RBNYuPh9UeuBs9tpUQ=
 github.com/google/renameio v0.1.0/go.mod h1:KWCgfxg9yswjAJkECMjeO8J8rahYeXnNhOm40UhjYkI=
 github.com/google/uuid v1.1.1 h1:Gkbcsh/GbpXz7lPftLA3P6TYMwjCLYm83jiFQZF/3gY=
 github.com/google/uuid v1.1.1/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=

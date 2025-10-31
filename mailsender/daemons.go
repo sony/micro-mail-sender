@@ -12,13 +12,17 @@ import (
 )
 
 const (
-	PostConfig     = "/etc/postfix/main.cf"
+	// PostConfig path of main.cf
+	PostConfig = "/etc/postfix/main.cf"
+	// PostConfigOrig path of main.cf.orig
 	PostConfigOrig = "/etc/postfix/main.cf.orig"
-	SaslPasswd     = "/etc/postfix/sasl_passwd"
-	PostOrigin     = "/etc/mailname"
+	// SaslPasswd path of sasl_passwd
+	SaslPasswd = "/etc/postfix/sasl_passwd" // #nosec G101
+	// PostOrigin path of mailname
+	PostOrigin = "/etc/mailname"
 )
 
-// Only called in standalone mode (inside docker container).
+// StartDaemons Only called in standalone mode (inside docker container).
 // User must be root.
 // Returns true on success, false on failure
 func StartDaemons(config *Config) bool {
@@ -43,7 +47,7 @@ func runSyslog(sugar *zap.SugaredLogger) bool {
 }
 
 func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
-	err := os.WriteFile(PostOrigin, []byte(config.MyDomain), 0644)
+	err := os.WriteFile(PostOrigin, []byte(config.MyDomain), 0644) // #nosec G306
 	if err != nil {
 		sugar.Errorw("Cannot set up mailname",
 			"path", PostOrigin,
@@ -85,7 +89,7 @@ func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
 		edited += fmt.Sprintf("%s = %s\n", key, value)
 	}
 
-	err = os.WriteFile(PostConfig, []byte(edited), 0644)
+	err = os.WriteFile(PostConfig, []byte(edited), 0644) // #nosec G306
 	if err != nil {
 		sugar.Errorw("Cannot write mail.cf",
 			"path", PostConfig,
@@ -105,7 +109,7 @@ func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
 }
 
 func runExternalCommand(sugar *zap.SugaredLogger, argv []string) bool {
-	cmd := exec.Command(argv[0], argv[1:]...)
+	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {

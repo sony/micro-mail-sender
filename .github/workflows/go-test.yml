@@ -1,0 +1,34 @@
+name: Go-Test
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.6'
+      - name: Test
+        run: go test ./... -v
+
+  go-integration-and-e2e-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: build
+        run: docker compose build
+      - name: up
+        run: docker compose up -d --wait
+      - name: integration test
+        run: make test
+      - name: e2e test
+        run: make e2etest
+      - name: down
+        run: docker compose down

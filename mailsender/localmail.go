@@ -20,11 +20,11 @@ func fetchLocalMail(app *App) (data []byte, rerr error) {
 
 	stdin, _ := cmd.StdinPipe()
 	defer func() {
-		rerr = appendError(rerr, stdin.Close())
+		_ = stdin.Close()
 	}()
 	stdout, _ := cmd.StdoutPipe()
 	defer func() {
-		rerr = appendError(rerr, stdout.Close())
+		_ = stdout.Close()
 	}()
 
 	err := cmd.Start()
@@ -35,8 +35,6 @@ func fetchLocalMail(app *App) (data []byte, rerr error) {
 	_, err = stdin.Write([]byte("type 1"))
 	if err != nil {
 		rerr = appendError(rerr, err)
-		rerr = appendError(rerr, stdin.Close())
-		rerr = appendError(rerr, cmd.Wait())
 		return nil, rerr
 	}
 	rerr = appendError(rerr, stdin.Close())
@@ -89,7 +87,7 @@ func parseLocalMail(app *App, data []byte) (*mail.Message, error) {
 	return mail.ReadMessage(bytes.NewReader(data[ind[0]:]))
 }
 
-func getFailedMessageId(app *App, msg *mail.Message) string {
+func getFailedMessageID(app *App, msg *mail.Message) string {
 	from := msg.Header.Get("from")
 	addr, err := mail.ParseAddress(from)
 	if err != nil {

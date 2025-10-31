@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"mime/multipart"
 	"net/textproto"
 	"regexp"
@@ -13,16 +14,21 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+	_ "github.com/lib/pq" // require for Open postgres
 )
 
 const (
-	MessageWaiting    = 0
+	// MessageWaiting waiting status
+	MessageWaiting = 0
+	// MessageProcessing processing status
 	MessageProcessing = 1
-	MessageSent       = 2
-	MessageAbandoned  = 3
+	// MessageSent sent status
+	MessageSent = 2
+	// MessageAbandoned abandoned status
+	MessageAbandoned = 3
 )
 
+// Message message data
 type Message struct {
 	uid        string
 	packet     SendRequest
@@ -99,11 +105,17 @@ func enqueueMessage1(app *App, req SendRequest, tx *sql.Tx) error {
 		return err
 	}
 
+	subject := req.Subject
+
+	if req.Personalizations[0].Subject != "" {
+		subject = req.Personalizations[0].Subject
+	}
+
 	_, err = tx.Exec(`insert into messages (`+
 		` uid, bid, sender, receivers, subject, status, last_update) `+
 		`values ($1, $2, $3, $4, $5, $6, $7)`,
 		uid, bid, req.From.Email,
-		receiverEmails(&req), req.Subject,
+		receiverEmails(&req), subject,
 		MessageWaiting, lastUpdate)
 	if err != nil {
 		return err
@@ -287,11 +299,8 @@ func (m *Message) cleanMessageBody(app *App) (rerr error) {
 }
 
 // Searching
-func searchMessages(app *App, criteria QNode, limit int) (msgs []Message, apperr *AppError) {
-	q := `select uid, packet, status, last_update ` +
-		`from messages ` +
-		`left join bodies on messages.bid = bodies.bid ` +
-		`where `
+func searchMessages(app *App, criteria QNode, limit int) (msgs []SearchResultItem, apperr *AppError) {
+	q := `select uid, sender, receivers, subject, status, last_update from messages where `
 	var params []interface{}
 	conds, params := buildWhereClause(criteria, params)
 	q = q + conds + " order by last_update desc "
@@ -301,7 +310,7 @@ func searchMessages(app *App, criteria QNode, limit int) (msgs []Message, apperr
 
 	rows, err := app.db.Query(q, params...)
 	if err != nil {
-		return []Message{}, WrapErr(500, err)
+		return []SearchResultItem{}, WrapErr(500, err)
 	}
 
 	defer func() {
@@ -315,27 +324,28 @@ func searchMessages(app *App, criteria QNode, limit int) (msgs []Message, apperr
 		}
 	}()
 
-	var ms []Message
+	var ms []SearchResultItem
 
 	for {
 		if !rows.Next() {
 			break
 		}
 
-		var m Message
-		var spacket interface{}
-		err = rows.Scan(&m.uid, &spacket, &m.status, &m.lastUpdate)
+		var m SearchResultItem
+		receivers := ""
+		status := 0
+		err = rows.Scan(&m.MsgID, &m.FromEmail, &receivers, &m.Subject, &status, &m.LastTimestamp)
 		if err != nil {
-			return []Message{}, WrapErr(500, err)
+			return []SearchResultItem{}, WrapErr(500, err)
 		}
-		if spacket == nil {
-			m.packet = SendRequest{}
-		} else {
-			err = json.Unmarshal([]byte(spacket.(string)), &m.packet)
-			if err != nil {
-				return []Message{}, WrapErr(500, err)
-			}
+
+		m.Status = getStatusString(status)
+		receivers = strings.ReplaceAll(receivers, "\x01", "")
+		toList := strings.Split(receivers, ",")
+		if len(toList) > 0 {
+			m.ToEmail = toList[0]
 		}
+
 		ms = append(ms, m)
 	}
 	return ms, nil
@@ -354,8 +364,8 @@ func buildWhereClause(qn QNode, args []interface{}) (string, []interface{}) {
 			return buildQuerySubject(ql, args)
 		case QueryStatus:
 			return buildQueryStatus(ql, args)
-		case QueryMessageId:
-			return buildQueryMessageId(ql, args)
+		case QueryMessageID:
+			return buildQueryMessageID(ql, args)
 		default:
 			panic("bad QueryKind")
 		}
@@ -432,7 +442,7 @@ func buildQueryStatus(ql *QLeaf, args []interface{}) (string, []interface{}) {
 	return s, append(args, st)
 }
 
-func buildQueryMessageId(ql *QLeaf, args []interface{}) (string, []interface{}) {
+func buildQueryMessageID(ql *QLeaf, args []interface{}) (string, []interface{}) {
 	s := "uid "
 	switch ql.op {
 	case QueryEqual:
@@ -444,10 +454,9 @@ func buildQueryMessageId(ql *QLeaf, args []interface{}) (string, []interface{}) 
 	return s, append(args, ql.value)
 }
 
-// convenience accessor
-func (m *Message) getStatusString() string {
+func getStatusString(status int) string {
 	r := "unknown"
-	switch m.status {
+	switch status {
 	case MessageWaiting:
 		r = "waiting"
 	case MessageProcessing:
@@ -458,10 +467,6 @@ func (m *Message) getStatusString() string {
 		r = "abandoned"
 	}
 	return r
-}
-
-func (m *Message) getLastUpdateString() string {
-	return time.Unix(m.lastUpdate, 0).Format(time.RFC3339)
 }
 
 //
@@ -626,29 +631,48 @@ func (m *Message) getSingleContent(p Personalization, buf *bytes.Buffer) {
 	buf.WriteString(c.Value)
 }
 
+func (m *Message) addresseesFieldValue(addressees []Addressee) string {
+	items := []string{}
+	for _, addressee := range addressees {
+
+		if addressee.Name == "" {
+			items = append(items, addressee.Email)
+		} else {
+			name := mime.BEncoding.Encode("utf-8", addressee.Name)
+			value := fmt.Sprintf("%s <%s>", name, addressee.Email)
+			items = append(items, value)
+		}
+
+	}
+	return strings.Join(items, ", ")
+}
+
 func (m *Message) getMessageBody() ([]byte, error) {
 	var buf bytes.Buffer
 	p := m.packet.Personalizations[0]
 
 	buf.WriteString("From: ")
-	buf.WriteString(m.packet.From.Email)
+	buf.WriteString(m.addresseesFieldValue([]Addressee{m.packet.From}))
 	buf.WriteString("\r\n")
 
-	for _, r := range p.To {
+	if len(p.To) > 0 {
 		buf.WriteString("To: ")
-		buf.WriteString(r.Email)
+		buf.WriteString(m.addresseesFieldValue(p.To))
 		buf.WriteString("\r\n")
 	}
-	for _, r := range p.Cc {
+
+	if len(p.Cc) > 0 {
 		buf.WriteString("Cc: ")
-		buf.WriteString(r.Email)
+		buf.WriteString(m.addresseesFieldValue(p.Cc))
 		buf.WriteString("\r\n")
 	}
-	for _, r := range p.Bcc {
+
+	if len(p.Bcc) > 0 {
 		buf.WriteString("Bcc: ")
-		buf.WriteString(r.Email)
+		buf.WriteString(m.addresseesFieldValue(p.Bcc))
 		buf.WriteString("\r\n")
 	}
+
 	buf.WriteString("Subject: ")
 	if p.Subject != "" {
 		buf.WriteString(p.Subject)

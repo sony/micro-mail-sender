@@ -1,0 +1,233 @@
+"/var/mail/root": 2 messages 2 new
+>N   1 shiro@lava.net     Mon Jan  1 00:00  13/392   Three
+ N   2 shiro@acm.org      Mon Jan  1 00:00  13/388   Four
+Delivered-To: shiro@example.com
+Received: by 2002:a17:90a:25ac:0:0:0:0 with SMTP id k41csp1520536pje;
+        Sun, 22 Sep 2019 03:26:43 -0700 (PDT)
+X-Received: by 2002:a02:2302:: with SMTP id u2mr31030557jau.70.1569148002843;
+        Sun, 22 Sep 2019 03:26:42 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1569148002; cv=none;
+        d=google.com; s=arc-20160816;
+        b=hT0JtpinRkQqXze7wFExR/fHQQCpGWfANG9OwUaajsC5GFrZ+he91G7fR7BT0lbaVR
+         JFd6UFmkdnPMhRq4iVANzmBmfNz/MOGdzIKTxi3DNVFxRWLi9p4l98hTqReUUuDYC5Iw
+         WlcVkoeKBf4syeGrvaH217f4z7TKZiJs8z/4PTcQsoCRZNvPxAao5aiN5B8hQ2o9ZGN9
+         4kftq17J0vNGGWRZ2DzKgGjV5fnUnoxW77MHvqzW9F1hLEOKW6h1+1bDQLexPeqCLv8S
+         27xcBG8o84EQiFsXY5SDqdKeEq2QXdDTDxA5GhVjWY/DYX+Ah9RUB0zEesf6iGMNLLsU
+         7TWQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20160816;
+        h=date:message-id:in-reply-to:references:subject:auto-submitted:to
+         :from:dkim-signature;
+        bh=2XoQGpV7Up46Q7ksUbI0vWqSRQV4QQxyH6qBAIXNmzk=;
+        b=fI/d3B91avBypG4vC9br4cRyO+9mZQ103q99IObjBuOvjoi5t8rT01veHvipKF68xB
+         5bKqKzFkYSEdsUmQGihNI9sK98iIKCAh4yQoIWtn/zjWvIYlPcgBl3a5R2X9I39lC4jY
+         TUy3e3xTrsJgeMAEFPsOsDA/+6Dqd5/jbqXrnfR03d3aDab+VpU3PPbUi70sK90dbI4U
+         DGnURcQjvMPFJScKP4KALIAXwFyhjK3CQO7SH2d2lTJmZN3osPTOSjjN5GvbnYEEaDUX
+         vn5gd9nLAXSCBf7oPqPk2cdQ9fLvOg6gz4CeVfJNzBEScSYFO47mmG9Qs+GswD07bUmN
+         zySQ==
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@googlemail.com header.s=20161025 header.b=u61TeUg9;
+       spf=pass (google.com: best guess record for domain of postmaster@mail-sor-f69.google.com designates 209.85.220.69 as permitted sender) smtp.helo=mail-sor-f69.google.com;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=googlemail.com
+Return-Path: <>
+Received: from mail-sor-f69.google.com (mail-sor-f69.google.com. [209.85.220.69])
+        by mx.google.com with SMTPS id s85sor6595763ios.87.2019.09.22.03.26.42
+        for <shiro@example.com>
+        (Google Transport Security);
+        Sun, 22 Sep 2019 03:26:42 -0700 (PDT)
+Received-SPF: pass (google.com: best guess record for domain of postmaster@mail-sor-f69.google.com designates 209.85.220.69 as permitted sender) client-ip=209.85.220.69;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@googlemail.com header.s=20161025 header.b=u61TeUg9;
+       spf=pass (google.com: best guess record for domain of postmaster@mail-sor-f69.google.com designates 209.85.220.69 as permitted sender) smtp.helo=mail-sor-f69.google.com;
+       dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=googlemail.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=googlemail.com; s=20161025;
+        h=from:to:auto-submitted:subject:references:in-reply-to:message-id
+         :date;
+        bh=2XoQGpV7Up46Q7ksUbI0vWqSRQV4QQxyH6qBAIXNmzk=;
+        b=u61TeUg9lNPrMO/ndX02S7ANjYfWYF4/izABE0Vh5vHCsTotQ5kVpVlmAqWpby5O0l
+         k1qAqOXXTZFJdbWvLtsgXw39wH1gdXkixOxo/E16LXRQATHC8480easbW5BNyNxhUPq+
+         f2Wal6jycmhO3lVHnJKh6wkZkJcNRRfMqvsd4IN4Sm6305brDGn8jSZKIQNQX0YDBSbT
+         civpZSjOLDEQyNkRirlXGCBFp7UMW7xKeb8BJXjAUrBH3fhkW/zDhbsRoKMVvfzgQCMB
+         BGJKBcbMlA/OqDJhokTHKn6UEpYD8xJ4aunicJjEs/uQXFGpgpzp5woy5b+ozWKjSrl0
+         j1mQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20161025;
+        h=x-gm-message-state:from:to:auto-submitted:subject:references
+         :in-reply-to:message-id:date;
+        bh=2XoQGpV7Up46Q7ksUbI0vWqSRQV4QQxyH6qBAIXNmzk=;
+        b=RUSxNysm3GaaK1W1hnbTCQBKggbQtdbVktQseAhsKLm71CGo6cSwYUSbKHqW/ncIyL
+         3ubiObMcpOqJhrnXSDg9IW/gIY4fPyTEHQalwg0QxM/CC9hP8b+lrDnqTWx4zHIvfse8
+         ZMVTOWDxDfgj7JSyJh6ZRqEdCNAeYqKtkpOEvQh5I8B7D3eD2XCIr0CVGQUsrI95uNRs
+         GWvSdXua2lP4pFmIr/IHcDuBpendELo8jxO/wIR/vb0oOTWl1S5iyiiWKW8bsQkN501y
+         BMdAzyPP6g5a+UufoHiwVAhAgCPr7b3itA30wErWQ7A5C7dTUHKXJfosr9fD+KIPu113
+         uaBg==
+X-Gm-Message-State: APjAAAWmvdBqpN7fOLcKS+XTctf0igs68zAhFwqA38vBVMdgpNt6QVkf LkT/CoSAjiC30BF7C+NKhMmGhwHFP/USLh1aqOfEQA==
+X-Google-Smtp-Source: APXvYqypKugEAqXwWz2L910h2Y8m84StZpAePXry91boZ5X1GmreCrV0fvf7marqFHaT1i4jItip0Vpccg9Q5CMvpiH3KQZ/J+tkGsY=
+X-Received: by 2002:a5e:da4d:: with SMTP id o13mr1154682iop.124.1569148002655;
+        Sun, 22 Sep 2019 03:26:42 -0700 (PDT)
+Content-Type: multipart/report; boundary="0000000000004c4d78059321bdf1"; report-type=delivery-status
+Return-Path: <>
+Received: by 2002:a5e:da4d:: with SMTP id o13mr1190860iop.124; Sun, 22 Sep 2019 03:26:42 -0700 (PDT)
+From: Mail Delivery Subsystem <mailer-daemon@googlemail.com>
+To: shiro@example.com
+Auto-Submitted: auto-replied
+Subject: Delivery Status Notification (Failure)
+References: <CALN0JNFe31bscLfLs8q4Rkn+Ci94umj6_5+R5b8ABWWxeof4VA@mail.example.com>
+In-Reply-To: <CALN0JNFe31bscLfLs8q4Rkn+Ci94umj6_5+R5b8ABWWxeof4VA@mail.example.com>
+X-Failed-Recipients: someone@example.com
+Message-ID: <5d874c62.1c69fb81.9d7fc.5538.GMR@mx.google.com>
+Date: Sun, 22 Sep 2019 03:26:42 -0700 (PDT)
+
+--0000000000004c4d78059321bdf1
+Content-Type: multipart/related; boundary="0000000000004c5b19059321bdff"
+
+--0000000000004c5b19059321bdff
+Content-Type: multipart/alternative; boundary="0000000000004c5b24059321bd01"
+
+--0000000000004c5b24059321bd01
+Content-Type: text/plain; charset="UTF-8"
+
+
+** Message not delivered **
+
+There was a problem delivering your message to someone@example.com. See the technical details below.
+
+Learn more here: https://support.google.com/mail/answer/7720
+
+The response was:
+
+The recipient server did not accept our requests to connect. Learn more at https://support.google.com/mail/answer/7720 
+[mail.example.com. 1.1.1.1: timed out]
+
+--0000000000004c5b24059321bd01
+Content-Type: text/html; charset="UTF-8"
+
+
+<html>
+<head>
+<style>
+* {
+font-family:Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+</style>
+</head>
+<body>
+<table cellpadding="0" cellspacing="0" class="email-wrapper" style="padding-top:32px;background-color:#ffffff;"><tbody>
+<tr><td>
+<table cellpadding=0 cellspacing=0><tbody>
+<tr><td style="max-width:560px;padding:24px 24px 32px;background-color:#fafafa;border:1px solid #e0e0e0;border-radius:2px">
+<img style="padding:0 24px 16px 0;float:left" width=72 height=72 alt="Error Icon" src="cid:icon.png">
+<table style="min-width:272px;padding-top:8px"><tbody>
+<tr><td><h2 style="font-size:20px;color:#212121;font-weight:bold;margin:0">
+Message not delivered
+</h2></td></tr>
+<tr><td style="padding-top:20px;color:#757575;font-size:16px;font-weight:normal;text-align:left">
+There was a problem delivering your message to <a style='color:#212121;text-decoration:none'><b>someone@example.com</b></a>. See the technical details below.
+</td></tr>
+<tr><td style="padding-top:24px;color:#4285F4;font-size:14px;font-weight:bold;text-align:left">
+<a style="text-decoration:none" href="https://support.google.com/mail/answer/7720">LEARN MORE</a>
+</td></tr>
+</tbody></table>
+</td></tr>
+</tbody></table>
+</td></tr>
+<tr style="border:none;background-color:#fff;font-size:12.8px;width:90%">
+<td align="left" style="padding:48px 10px">
+The response was:<br/>
+<p style="font-family:monospace">
+The recipient server did not accept our requests to connect. Learn more at https://support.google.com/mail/answer/7720
+[mail.example.com. 1.1.1.1: timed out]
+</p>
+</td>
+</tr>
+</tbody></table>
+</body>
+</html>
+
+--0000000000004c5b24059321bd01--
+--0000000000004c5b19059321bdff
+Content-Type: image/png; name="icon.png"
+Content-Disposition: attachment; filename="icon.png"
+Content-Transfer-Encoding: base64
+Content-ID: <icon.png>
+
+
+--0000000000004c5b19059321bdff--
+--0000000000004c4d78059321bdf1
+Content-Type: message/delivery-status
+
+
+--0000000000004c4d78059321bdf1
+Content-Type: message/rfc822
+
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=example.com; s=20161025;
+        h=mime-version:from:date:message-id:subject:to;
+        bh=0ph4MkH3Dm2Kfn5vVANOOLv4ZEKktRB8RUpL5ZdLQXM=;
+        b=llSx1k5d79922dvNEZNAvtQ961/udoB9utd7OTrzaQa4PbtG+cWk4dsKYxv9xUbMOd
+         b+GY5HMwVZeOr0TYmFIw+YXlwRvOXZf4tCKhrvhq20UiVJuE/cdgNG3gc4AD8AnCHUh8
+         NS6I56I0F6h4Xim8O2o1VrDwjhRvTtHNkkLaMuTixtPlFYJWy6K9EZwJ2xQLzGBy/fcN
+         wDxt+dQbf8xn1Un2S8GzHsXd7W71IgH/QynAOX5WheBDhxdFdS1A2QM3lzsGXAP9//p9
+         tn7aqP4ozZxogIIXH/fJe7bov6opwQPxxH/PLJytPSe6fh7mHaFG79J981rbYgdKaaCV
+         hCzQ==
+X-Google-DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=1e100.net; s=20161025;
+        h=x-gm-message-state:mime-version:from:date:message-id:subject:to;
+        bh=0ph4MkH3Dm2Kfn5vVANOOLv4ZEKktRB8RUpL5ZdLQXM=;
+        b=ItqXRrBmerU0BxAQ1awkH0zaoUD2NKLwwFbPBD0anqFmujnbUqO3boYzel82bgSXjU
+         nIxLWaxXTO/42oX0IuXA0lIG9T9jg3Bt0r6J1ls5YRFzx2E1e/6SVQziJTNslxGqMioh
+         RR0rKjNPK9qY2kY1U9QYYJXYYO6cndmZrBtxtXEJQdVG9fZNUj7W8FY+y5kus6cLqMFe
+         GNdsoXgnT6+Z3vZNctSd5KFqaBWrlGRmZfrjne+OMSeG/5cb+zpVZ/a4Q7BTgjFIPvqi
+         FfFolS6MPrZScvavVJZ84lCrcwmE/ji7zs4dfS+gaiVzCnSpNdlTtsf7H/DxiFzMMSEz
+         Z4hA==
+X-Gm-Message-State: APjAAAVE29PbO6qFxTN5QGbhc8O6HORYfV+EKIDujiZnrhIcSMP+kQx8 vr9iQmBKb4AiR06Ii5fre3hOqr1DDMYinUBwhpiKKg==
+X-Google-Smtp-Source: APXvYqxzCgPYb+xwl86VO67OiyuuczN0bfS+WsmyAzA6A6eV3PaFMXhEqTYMrmYH6rNxCwtQy2TgLTfI/zdnstp15C8=
+X-Received: by 2002:a63:590:: with SMTP id 138mr7101313pgf.78.1568866500236; Wed, 18 Sep 2019 21:15:00 -0700 (PDT)
+MIME-Version: 1.0
+From: Shiro Kawai <shiro@example.com>
+Date: Wed, 18 Sep 2019 18:14:49 -1000
+Message-ID: <CALN0JNFe31bscLfLs8q4Rkn+Ci94umj6_5+R5b8ABWWxeof4VA@mail.example.com>
+Subject: Testmail
+To: "Someone" <someone@example.com>
+Content-Type: multipart/alternative; boundary="000000000000725ac00592e03281"
+
+--000000000000725ac00592e03281
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+6Jek5pyo5qij44CB44GU54Sh5rKZ5rGw44GX44Gm44GK44KK44G+44GZ44CCU2NoZW1lIEFydHPj
+ga7lt53lkIjjgafjgZnjgIINCg0Kc2VhcmNoZHIuanDjgIFkaWFnLnNlYXJjaGRyLmpw44GK44KI
+44GzdGVsZW1lZGljYS5zY2hlbWVhcnRzLmNvbeOBrg0KU1NM44K144O844OQ6Ki85piO5pu444GM
+44Gd44KN44Gd44KN5pyf6ZmQ5YiH44KM44Gq44Gu44Gn44GZ44GM44CB44G+44Gg44GT44KM44KJ
+44Gu44OJ44Oh44Kk44Oz44GrDQpodHRwc+OCouOCr+OCu+OCueOBmeOCi+OBk+OBqOOBr+OBguOC
+iuOBvuOBmeOBiz8NCmlPU+OBi+OCieOBruOCouOCr+OCu+OCueOBquOCiWh0dHBz5b+F6aCI44Gn
+44GZ44GX44CB5LiA6Iis5YWs6ZaL44GZ44KL44K144Kk44OI44Gq44KJ44GC44Gj44Gf5pa544GM
+DQrlpb3jgb7jgZfjgYTjgafjgZnjgYzjgIHpmZDlrprlhazplovjgoTlhoXpg6jnmoTjgavkvb/j
+gYbjgarjgonnibnjgavlv4XopoHjgafjga/jgarjgYTjgYvjgoLjgZfjgozjgb7jgZvjgpPjgIIN
+Cg0K44KC44GX44G+44GgaHR0cHPjgYzlv4XopoHjgarjg4njg6HjgqTjg7PjgYzjgYLjgorjgb7j
+gZfjgZ/jgonjgYrnn6XjgonjgZvjgY/jgaDjgZXjgYTjgIINCueJueOBq+W/heimgeOBquOBkeOC
+jOOBsOOBk+OBruOBvuOBvuacn+mZkOWIh+OCjOOBq+OBl+OBvuOBmeOAgg0K
+--000000000000725ac00592e03281
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: base64
+
+PGRpdiBkaXI9Imx0ciI+6Jek5pyo5qij44CB44GU54Sh5rKZ5rGw44GX44Gm44GK44KK44G+44GZ
+44CCU2NoZW1lIEFydHPjga7lt53lkIjjgafjgZnjgII8ZGl2Pjxicj48L2Rpdj48ZGl2PjxhIGhy
+ZWY9Imh0dHA6Ly9zZWFyY2hkci5qcCI+c2VhcmNoZHIuanA8L2E+44CBPGEgaHJlZj0iaHR0cDov
+L2RpYWcuc2VhcmNoZHIuanAiPmRpYWcuc2VhcmNoZHIuanA8L2E+44GK44KI44GzPGEgaHJlZj0i
+aHR0cDovL3RlbGVtZWRpY2Euc2NoZW1lYXJ0cy5jb20iPnRlbGVtZWRpY2Euc2NoZW1lYXJ0cy5j
+b208L2E+44GuPC9kaXY+PGRpdj5TU0zjgrXjg7zjg5DoqLzmmI7mm7jjgYzjgZ3jgo3jgZ3jgo3m
+nJ/pmZDliIfjgozjgarjga7jgafjgZnjgYzjgIHjgb7jgaDjgZPjgozjgonjga7jg4njg6HjgqTj
+g7Pjgas8L2Rpdj48ZGl2Pmh0dHBz44Ki44Kv44K744K544GZ44KL44GT44Go44Gv44GC44KK44G+
+44GZ44GLPzwvZGl2PjxkaXY+aU9T44GL44KJ44Gu44Ki44Kv44K744K544Gq44KJaHR0cHPlv4Xp
+oIjjgafjgZnjgZfjgIHkuIDoiKzlhazplovjgZnjgovjgrXjgqTjg4jjgarjgonjgYLjgaPjgZ/m
+lrnjgYw8L2Rpdj48ZGl2PuWlveOBvuOBl+OBhOOBp+OBmeOBjOOAgemZkOWumuWFrOmWi+OChOWG
+hemDqOeahOOBq+S9v+OBhuOBquOCieeJueOBq+W/heimgeOBp+OBr+OBquOBhOOBi+OCguOBl+OC
+jOOBvuOBm+OCk+OAgjwvZGl2PjxkaXY+PGJyPjwvZGl2PjxkaXY+44KC44GX44G+44GgaHR0cHPj
+gYzlv4XopoHjgarjg4njg6HjgqTjg7PjgYzjgYLjgorjgb7jgZfjgZ/jgonjgYrnn6XjgonjgZvj
+gY/jgaDjgZXjgYTjgII8L2Rpdj48ZGl2PueJueOBq+W/heimgeOBquOBkeOCjOOBsOOBk+OBruOB
+vuOBvuacn+mZkOWIh+OCjOOBq+OBl+OBvuOBmeOAgjwvZGl2PjxkaXY+PGJyPjwvZGl2PjxkaXY+
+PGJyPjwvZGl2PjxkaXY+PGJyPjwvZGl2PjwvZGl2Pg0K
+--000000000000725ac00592e03281--
+
+--0000000000004c4d78059321bdf1--

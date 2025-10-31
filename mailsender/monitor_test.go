@@ -3,12 +3,12 @@ package mailsender
 import (
 	"log"
 	"net"
+	"net/smtp"
 	"os/exec"
 	"os/user"
 	"testing"
 
 	"github.com/chrj/smtpd"
-	smtp "github.com/emersion/go-smtp"
 	"github.com/stretchr/testify/require"
 )
 
@@ -49,13 +49,13 @@ func InitTestMonitor(t *testing.T) *TestMonitor {
 		Handler: testmon.handleMail,
 	}
 
-	err = testmon.runSmtpBackground("localhost:2025")
+	err = testmon.runSMTPBackground("localhost:2025")
 	require.Nil(t, err)
 
 	return &testmon
 }
 
-func (m *TestMonitor) runSmtpBackground(addr string) error {
+func (m *TestMonitor) runSMTPBackground(addr string) error {
 	m.smtpdStopper = make(chan bool)
 
 	l, err := net.Listen("tcp", addr)
@@ -66,7 +66,7 @@ func (m *TestMonitor) runSmtpBackground(addr string) error {
 	go func() {
 		defer close(m.smtpdStopper)
 		<-m.smtpdStopper
-		l.Close()
+		_ = l.Close()
 	}()
 	go func() {
 		_ = m.smtpd.Serve(l)
@@ -98,14 +98,16 @@ func sendReturnMail(returnmail string) error {
 	if err != nil {
 		return err
 	}
-	defer clnt.Close()
+	defer func() {
+		_ = clnt.Close()
+	}()
 
 	err = clnt.Hello("localhost")
 	if err != nil {
 		return err
 	}
 
-	err = clnt.Mail("mailer-daemon@localhost", nil)
+	err = clnt.Mail("mailer-daemon@localhost")
 	if err != nil {
 		return err
 	}
@@ -198,9 +200,10 @@ func TestMonitorMessage(t *testing.T) {
 	err = sendMesg(tmon.app, m)
 	require.Nil(t, err)
 
+	mailBox := newMailboxManager()
 	waitus := int64(100)
-	for i := 0; i < 10; i++ {
-		processed, w := monitor1(tmon.app, waitus)
+	for i := 0; i < 20; i++ {
+		processed, w := monitor1(tmon.app, mailBox, waitus)
 		if processed {
 			break
 		}

@@ -1,8 +1,8 @@
 # REST API
 
-The two main calls are the one to send mails and the one to query their status.
-We try to make them a subset of SendGrid API.
-We also provide a diagnostic API.
+The two main API calls are for sending emails and querying their status.
+We aim to make them compatible with the SendGrid API.
+We also provide a diagnostic API for troubleshooting.
 
 - [POST /v3/mail/send - Mail send](send.md)
 
@@ -11,4 +11,4 @@ We also provide a diagnostic API.
 - [GET /v3/smtplog - View MTA logs](log.md)
 
 All API calls require an `Authorization` header with a value `Bearer [KEY]`
-where `[KEY]` is to be replaced with one of the keys specified in the server configuration.
+where `[KEY]` should be replaced with one of the keys specified in the server configuration.

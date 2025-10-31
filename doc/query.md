@@ -1,15 +1,15 @@
-# Status query
+# Status Query
 
 Query message status.
 
-## Entry point
+## Entry Point
 
 `GET /v3/messages?query=<query-expr>`
 
-## Request Parameter
+## Request Parameters
 
-A query parameter `query` is required.  Its value is a *URLencoded*
-string of a query expression, which must follow this EBNF:
+A query parameter `query` is required.
+Its value is a *URL-encoded* string of a query expression that must follow this EBNF:
 
 ```
 <query-expr> : <simple-query> [ <conj> <query-expr> ]*
@@ -24,19 +24,17 @@ string of a query expression, which must follow this EBNF:
 
 <op>   : '=' | '!='
 
-<value> : A double-quoted string.  Double-quote and backslash in
-          the value must be escaped by a backslash.
+<value> : A double-quoted string. Double-quotes and backslashes in the value must be escaped with a backslash.
 
 <conj> : 'AND' | 'OR'
 
 ```
 
-Whitespaces are allowed around terminals.
+Whitespace is allowed around terminals.
 
 ## Response
 
-Upon successful operation, a 200 response with the following body
-is returned.
+Upon successful operation, a 200 response with the following body is returned.
 
 
 ```
@@ -49,17 +47,18 @@ is returned.
 
 ```
 {
-    "msg-id"      : <string>
-    "status"      : <string>
-    "last-update" : <string>
-    "request"     : <SendRequest>
+    "from_email"        : <string>
+    "msg_id"            : <string>
+    "subject"           : <string>
+    "to_email"          : <string>
+    "status"            : <string>
+    "last_timestamp"    : <int>
 }
 ```
 
-- `msg-id` is the message ID assigned by MailSender.
-- `status` is either one of `waiting`, `processing`, `sent`, or `abandoned`.
-- `last-update` is RFC3339 format of the timestamp when the status
-of this message is last updated.
-- `request` is the `SendRequest` passed to `/v3/mail/send` API,
-expanded for personalizations.  Note that if the message is already sent
-or abandoned, this field is not included since the request packet is discarded.
+- `from_email` is the sender's email address.
+- `msg_id` is the message ID assigned by MailSender.
+- `subject` is the subject of the email.
+- `to_email` is the recipient's email address.
+- `status` is one of `waiting`, `processing`, `sent`, or `abandoned`.
+- `last_timestamp` is the last timestamp in Unix time.
