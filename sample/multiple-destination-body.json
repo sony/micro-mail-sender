@@ -1,0 +1,40 @@
+{
+  "personalizations":[
+    {
+      "to":[
+        {
+          "name": "TO\"太郎",
+          "email":"to@example.com"
+        },
+        {
+          "email":"to2@example.com"
+        }
+      ],
+      "cc":[
+        {
+          "name": "CC\"花子",
+          "email":"cc@example.com"
+        },
+        {
+          "email":"cc2@example.com"
+        }
+      ],
+      "bcc":[
+        {
+          "name": "BCC\"武",
+          "email":"bcc@example.com"
+        },
+        {
+          "email":"bcc2@example.com"
+        }
+      ],
+      "subject":"test mail"
+    }
+  ],
+  "from": { "email":"from@example.com" },
+  "content": [
+    { "type":"text/plain",
+      "value":"test mail body"
+    }
+  ]
+}

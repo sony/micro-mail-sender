@@ -16,6 +16,7 @@ const (
 	EnvDbSSLMode  = "DB_SSLMODE"
 )
 
+// Config config of this app.
 type Config struct {
 	AppIDs     []string          `json:"api-keys"`
 	MyDomain   string            `json:"mydomain"`
@@ -26,14 +27,15 @@ type Config struct {
 	DbUser     string            `json:"dbuser"`
 	DbPassword string            `json:"dbpassword"`
 	DbSSLMode  string            `json:"dbsslmode"`
-	SmtpPort   int               `json:"smtp-port"`
-	SmtpLog    string            `json:"smtp-log"`
+	SMTPPort   int               `json:"smtp-port"`
+	SMTPLog    string            `json:"smtp-log"`
 	RelayHost  string            `json:"relayhost"`
 	RelayUser  string            `json:"relayuser"`
 	RelayPass  string            `json:"relaypass"`
 	Others     map[string]string `json:"others"`
 }
 
+// DefaultConfig default config.
 func DefaultConfig() *Config {
 	return &Config{Host: "0.0.0.0",
 		Port:       8333,
@@ -43,8 +45,8 @@ func DefaultConfig() *Config {
 		DbUser:     "ms",
 		DbPassword: "bd9838864bdbbf1c7cd39a0e394c50cd1d0d516c",
 		DbSSLMode:  "disable",
-		SmtpPort:   25,
-		SmtpLog:    "/var/log/mail.log",
+		SMTPPort:   25,
+		SMTPLog:    "/var/log/mail.log",
 		AppIDs:     []string{},
 	}
 }
@@ -54,7 +56,7 @@ func ParseConfig(configStr string) (*Config, error) {
 	config := DefaultConfig()
 
 	if configStr == "" {
-		return config, nil
+		return overwriteConfigFromEnv(config), nil
 	}
 	decoder := json.NewDecoder(strings.NewReader(configStr))
 	err := decoder.Decode(config)

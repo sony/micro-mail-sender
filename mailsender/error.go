@@ -27,5 +27,8 @@ func (e *AppError) Error() string {
 }
 
 func appendError(err1, err2 error) error {
+	if err1 == nil && err2 == nil {
+		return nil
+	}
 	return multierror.Append(err1, err2)
 }

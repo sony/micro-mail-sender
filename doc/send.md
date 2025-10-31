@@ -1,4 +1,4 @@
-# Mail Send
+# Mail Delivery
 
 Send messages.
 
@@ -8,8 +8,7 @@ Send messages.
 
 ## Request Body
 
-The main request body, `SendRequest`, is a JSON object with
-the following format:
+The main request body, `SendRequest`, is a JSON object with the following format:
 
 ### SendRequest
 
@@ -23,26 +22,23 @@ the following format:
 }
 ```
 
-- `personalizations` is an array of `Personalization` object, each
-of which represents a recipient.
-- `from`, `reply_to` and `subject` are used for the corresponding field.
-- `content` is the mail content.  SendGrid allows alternative multipart
-content, but MailSender currently supports only one content,
-and only the first `Content` is used.
+- `personalizations` is an array of `Personalization` objects, each of which represents a recipient.
+- `from`, `reply_to`, and `subject` are used for the corresponding fields.
+- `content` is the email content.
+SendGrid allows alternative multipart content,
+but MicroMailSender currently supports only one content type, and only the first `Content` is used.
 
 ### Personalization
 
 This is called personalization
-because SendGrid allows pre-defined template message to be customized according
-to this info, but in our case, it is just recipient info.
+because SendGrid allows pre-defined template messages to be customized according to this information,
+but in our case, it is just recipient information.
 
 You can have multiple recipients in one `Personalization`,
-but MailSender treats one `Personalization` as an effective recipients.
-Suppose you send one `SendRequest` with three `Personalization`.
-Then MailSender creates three email messages, each one having unique
-message-id, and pass them to MTA.  It doesn't matter how many actual
-emails are included in each `Personalization`.
-
+but MicroMailSender treats one `Personalization` as one effective recipient.
+Suppose you send one `SendRequest` with three `Personalization` objects.
+Then MicroMailSender creates three email messages, each with a unique message-id, and passes them to the MTA.
+It does not matter how many actual email addresses are included in each `Personalization`.
 
 ```
 {
@@ -50,14 +46,13 @@ emails are included in each `Personalization`.
     "cc"      : [ <Address> ...],         // optional
     "bcc"     : [ <Address> ...],         // optional
     "subject" : <string>,                 // optional (to override main subject)
-    "headers" : <json-objectt>,           // optional
+    "headers" : <json-object>,            // optional
 }
 ```
 
 ### Address
 
-`Address` is a generic object paring an email address and
-an accompanied name.
+`Address` is a generic object that pairs an email address with an optional name.
 
 ```
 {
@@ -79,25 +74,21 @@ an accompanied name.
 
 ## Response
 
-Upon successful operation, a 200 response with the following 
-body is returned:
+Upon successful operation, a 202 response is returned without a body.
 
+Note that this merely means the request is now in the hands of the MTA,
+and does not mean the email was successfully delivered. 
 
-```
-{
-    "result" : "ok"
-}
-```
-
-Note that it merely means the request is now on the hand of MTA, and
-does not mean the email is successfully delivered. 
-
-If the input contains invalid parameters, a 400 response with
-the following body is returned.
+If the input contains invalid parameters,
+a 400 response with the following body is returned.
 
 ```
 {
-    "code"    : <http-response-code>
-    "message" : <string>   // error message
+  "errors": [
+    {
+      "message": "content too large",
+      "field": "field"
+    }
+  ]
 }
 ```

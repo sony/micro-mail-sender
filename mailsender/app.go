@@ -17,34 +17,50 @@ import (
 )
 
 const (
-	defaultPort = 8333
+	defaultPort           = 8333
+	jsonParseErrorMessage = `{"errors":[{"message":"fail to parse response body to json"}]}`
 )
 
+// App is application
 type App struct {
 	config *Config
 	db     *sql.DB
 	logger *zap.SugaredLogger
 }
 
+// ErrorResponse is content of error response
+type ErrorResponse struct {
+	Errors []Error `json:"errors"`
+}
+
+// Error is error item on response.
+type Error struct {
+	Message string  `json:"message"`
+	Field   *string `json:"field,omitempty"`
+}
+
+// Addressee is address of a mail.
 type Addressee struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 }
 
+// Personalization hold Personalization information
 type Personalization struct {
 	To      []Addressee         `json:"to"`
 	Cc      []Addressee         `json:"cc"`
 	Bcc     []Addressee         `json:"bcc"`
 	Subject string              `json:"subject"`
 	Headers map[string][]string `json:"headers"`
-	SendAt  int                 `json:"send_at"`
 }
 
+// Content hold content information
 type Content struct {
 	Type  string `json:"type"`  // mime-type
 	Value string `json:"value"` // actual content
 }
 
+// Attachment hold attachment information
 type Attachment struct {
 	Content     string `json:"content"` // base64 encoded content
 	Type        string `json:"type"`    // mime type
@@ -53,6 +69,7 @@ type Attachment struct {
 	ContentID   string `json:"content_id"`
 }
 
+// SendRequest is request body of mail send
 type SendRequest struct {
 	Personalizations []Personalization `json:"personalizations"`
 	From             Addressee         `json:"from"`
@@ -60,19 +77,21 @@ type SendRequest struct {
 	Subject          string            `json:"subject"`
 	Content          []Content         `json:"content"`
 	Attachments      []Attachment      `json:"attachments"`
-	SendAt           int               `json:"send_at"`
-	BatchID          string            `json:"batch_id"`
 }
 
+// SearchResultItem is item of search result item
 type SearchResultItem struct {
-	Uid        string       `json:"msg-id"`
-	Status     string       `json:"status"`
-	LastUpdate string       `json:"last-update"`
-	Request    *SendRequest `json:"request"`
+	FromEmail     string `json:"from_email"`
+	MsgID         string `json:"msg_id"`
+	Subject       string `json:"subject"`
+	ToEmail       string `json:"to_email"`
+	Status        string `json:"status"`
+	LastTimestamp int    `json:"last_timestamp"`
 }
 
+// SearchResult is item of search result
 type SearchResult struct {
-	Messages []*SearchResultItem `json:"messages"`
+	Messages []SearchResultItem `json:"messages"`
 }
 
 // RunServer enters server loop.  Only returns when something bad happens.
@@ -139,19 +158,52 @@ func newRouter(app *App) *mux.Router {
 	router.HandleFunc("/v3/mail/send", app.hMailSend).Methods("POST")
 	router.HandleFunc("/v3/messages", app.hMessages).Methods("GET").
 		Queries("query", "{query}")
-	router.HandleFunc("/v3/smtplog", app.hSmtpLog).Methods("GET").
+	router.HandleFunc("/v3/smtplog", app.hSMTPLog).Methods("GET").
 		Queries("count", "{count}")
 	return router
 }
 
-func returnJSON(w http.ResponseWriter, val interface{}) {
+func returnJSON(w http.ResponseWriter, val any) {
 	js, err := json.Marshal(val)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		http.Error(w, jsonParseErrorMessage, http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(js)
+}
+
+func returnErrWithField(app *App, w http.ResponseWriter, apperr *AppError) {
+	if apperr.Code == 500 {
+		app.logger.Errorw("Returning Internal Error (500):",
+			"message", apperr.Message,
+			"error", apperr.Internal)
+
+		res := ErrorResponse{
+			Errors: []Error{{
+				Message: apperr.Error(),
+			}},
+		}
+		bodybytes, err := json.Marshal(res)
+		if err != nil {
+			http.Error(w, jsonParseErrorMessage, http.StatusInternalServerError)
+			return
+		}
+		http.Error(w, string(bodybytes), http.StatusInternalServerError)
+	}
+
+	res := ErrorResponse{
+		Errors: []Error{{
+			Message: apperr.Error(),
+		}},
+	}
+	bodybytes, err := json.Marshal(res)
+	if err != nil {
+		http.Error(w, jsonParseErrorMessage, http.StatusInternalServerError)
+		return
+	}
+
+	http.Error(w, string(bodybytes), apperr.Code)
 }
 
 func returnErr(app *App, w http.ResponseWriter, apperr *AppError) {
@@ -165,9 +217,17 @@ func returnErr(app *App, w http.ResponseWriter, apperr *AppError) {
 			"message", apperr.Error())
 
 	}
-	body := map[string]string{"code": strconv.Itoa(apperr.Code),
-		"error": apperr.Error()}
-	bodybytes, _ := json.Marshal(body)
+
+	res := ErrorResponse{
+		Errors: []Error{{
+			Message: apperr.Error(),
+		}},
+	}
+	bodybytes, err := json.Marshal(res)
+	if err != nil {
+		http.Error(w, jsonParseErrorMessage, http.StatusInternalServerError)
+		return
+	}
 	http.Error(w, string(bodybytes), apperr.Code)
 }
 
@@ -194,14 +254,14 @@ func (app *App) hHello(w http.ResponseWriter, r *http.Request) {
 func (app *App) hMailSend(w http.ResponseWriter, r *http.Request) {
 	apperr := app.checkApikey(r)
 	if apperr != nil {
-		returnErr(app, w, apperr)
+		returnErrWithField(app, w, apperr)
 		return
 	}
 
 	var req SendRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		returnErr(app, w, WrapErr(400, err))
+		returnErrWithField(app, w, WrapErr(400, err))
 		return
 	}
 
@@ -210,10 +270,11 @@ func (app *App) hMailSend(w http.ResponseWriter, r *http.Request) {
 
 	apperr = enqueueMessage(app, req)
 	if apperr != nil {
-		returnErr(app, w, apperr)
+		returnErrWithField(app, w, apperr)
 		return
 	}
-	returnJSON(w, map[string]string{"result": "ok"})
+	w.WriteHeader(http.StatusAccepted)
+	_, _ = w.Write([]byte{})
 }
 
 func (app *App) hMessages(w http.ResponseWriter, r *http.Request) {
@@ -254,41 +315,27 @@ func (app *App) hMessages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var srs []*SearchResultItem
-	for _, m := range msgs {
-		var req *SendRequest
-		if len(m.packet.Personalizations) > 0 {
-			req = &m.packet
-		}
-		srs = append(srs, &SearchResultItem{
-			Uid:        m.uid,
-			Status:     m.getStatusString(),
-			LastUpdate: m.getLastUpdateString(),
-			Request:    req,
-		})
-	}
-
-	returnJSON(w, &SearchResult{Messages: srs})
+	returnJSON(w, &SearchResult{Messages: msgs})
 }
 
-func (app *App) hSmtpLog(w http.ResponseWriter, r *http.Request) {
+func (app *App) hSMTPLog(w http.ResponseWriter, r *http.Request) {
 	apperr := app.checkApikey(r)
 	if apperr != nil {
 		returnErr(app, w, apperr)
 		return
 	}
 
-	s_count := r.FormValue("count")
-	if s_count == "" {
-		s_count = "262144"
+	sCount := r.FormValue("count")
+	if sCount == "" {
+		sCount = "262144"
 	}
-	count, err := strconv.ParseInt(s_count, 10, 64)
+	count, err := strconv.ParseInt(sCount, 10, 64)
 	if err != nil {
 		returnErr(app, w, WrapErr(400, err))
 		return
 	}
 
-	logpath := app.config.SmtpLog
+	logpath := app.config.SMTPLog
 
 	file, err := os.Open(logpath)
 	if err != nil {
@@ -317,7 +364,7 @@ func (app *App) hSmtpLog(w http.ResponseWriter, r *http.Request) {
 		result = append(lines[i:count], result...)
 	}
 
-	returnJSON(w, map[string]interface{}{
+	returnJSON(w, map[string]any{
 		"count": total,
 		"lines": result,
 	})

@@ -5,38 +5,50 @@ import (
 	"strings"
 )
 
-// Type
+// QueryType query type
 type QueryType int
 
 const (
+	// QueryLeaf leaf
 	QueryLeaf = iota
+	// QueryAnd and
 	QueryAnd
+	// QueryOr or
 	QueryOr
 )
 
-// Leaf kind
+// QueryKind Leaf kind
 type QueryKind int
 
 const (
+	// QuerySender sender
 	QuerySender = iota
+	// QueryReceiver receiver
 	QueryReceiver
+	// QuerySubject subject
 	QuerySubject
+	// QueryStatus status
 	QueryStatus
-	QueryMessageId
+	//QueryMessageID messageID
+	QueryMessageID
 )
 
-// Leaf operator
+// QueryOperator Leaf operator
 type QueryOperator int
 
 const (
+	// QueryEqual equal
 	QueryEqual = iota
+	// QueryEqual not equal
 	QueryNotEqual
 )
 
+// QNode node
 type QNode interface {
 	getType() QueryType
 }
 
+// QExpr exr
 type QExpr struct {
 	qtype QueryType
 	a     QNode
@@ -47,6 +59,7 @@ func (t *QExpr) getType() QueryType {
 	return t.qtype
 }
 
+// QLeaf leaf
 type QLeaf struct {
 	kind  QueryKind
 	op    QueryOperator
@@ -78,9 +91,8 @@ func skipws(input string) string {
 func take(input string, n int) string {
 	if len(input) <= n {
 		return input
-	} else {
-		return input[0:n] + " ..."
 	}
+	return input[0:n] + " ..."
 }
 
 func badmsg(input string) *AppError {

@@ -1,0 +1,27 @@
+{
+  "personalizations":[
+    {
+      "to":[
+        {
+          "email":"to@example.com"
+        },
+        {
+          "email":"to2@example.com"
+        }
+      ],
+      "subject":"test mail1"
+    },
+    {
+      "to":[{
+        "email":"to@example2.com"
+      }],
+      "subject":"test mail2"
+    }
+  ],
+  "from": { "email":"from@example.com" },
+  "content": [
+    { "type":"text/plain",
+      "value":"test mail body"
+    }
+  ]
+}

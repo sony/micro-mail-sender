@@ -1,3 +1,5 @@
+//go:build integration
+
 package mailsender
 
 import (
@@ -7,8 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestGetFailedMessageId(t *testing.T) {
-	config, _ := ParseConfig(`{"host":"localhost"}`)
+func TestGetFailedMessageID(t *testing.T) {
+	config, _ := ParseConfig(`{"host":"localhost","dbname":"mailsender_test"}`)
 	app := newApp(config)
 
 	testmsg, err := os.ReadFile("../testdata/localmail1.txt")
@@ -18,7 +20,7 @@ func TestGetFailedMessageId(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, msg)
 
-	msgid := getFailedMessageId(app, msg)
+	msgid := getFailedMessageID(app, msg)
 	require.Equal(t, "CALN0JNFe31bscLfLs8q4Rkn+Ci94umj6_5+R5b8ABWWxeof4VA@mail.example.com",
 		msgid)
 }

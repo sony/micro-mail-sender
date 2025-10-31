@@ -6,14 +6,14 @@ import (
 
 // try fetch and process one message.  returns a flag whether a mail
 // is processed, and next wait time in us.
-func monitor1(app *App, waitus int64) (bool, int64) {
+func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 	time.Sleep(time.Duration(waitus) * time.Millisecond)
 
-	if !hasUnreadLocalMail(app) {
+	if !mailbox.hasUnreadLocalMail(app) {
 		return false, 500
 	}
 
-	data, err := fetchLocalMail(app)
+	data, err := mailbox.fetchLocalMail(app)
 	if err != nil {
 		app.logger.Warnw("Failed fetchLocalMail",
 			"err", err)
@@ -33,7 +33,7 @@ func monitor1(app *App, waitus int64) (bool, int64) {
 		return false, 500
 	}
 
-	msgid := getFailedMessageId(app, msg)
+	msgid := getFailedMessageID(app, msg)
 	if msgid != "" {
 		m, err := getMessage(app, msgid)
 		if err != nil {
@@ -59,8 +59,9 @@ func monitor1(app *App, waitus int64) (bool, int64) {
 
 func monitorLoop(app *App) {
 	waitus := int64(0)
+	mailbox := newMailboxManager()
 	for {
-		_, waitus = monitor1(app, waitus)
+		_, waitus = monitor1(app, mailbox, waitus)
 	}
 }
 

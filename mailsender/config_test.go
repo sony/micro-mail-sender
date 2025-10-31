@@ -25,17 +25,14 @@ func TestParseConfig(t *testing.T) {
 	require.Equal(t, "smtp.example.com", c.Host)
 	require.Equal(t, 2525, c.Port)
 	require.Equal(t, "example.com", c.MyDomain)
-	require.Equal(t, "localhost", c.DbHost)
 	require.Equal(t, "mailsender", c.DbName)
 
 	c, err = ParseConfig(`{` +
-		`"dbhost": "127.0.0.2",` +
 		`"dbname": "mailsender_test"}`)
 	require.Nil(t, err)
 	require.Equal(t, "0.0.0.0", c.Host)
 	require.Equal(t, 8333, c.Port)
 	require.Equal(t, "local", c.MyDomain)
-	require.Equal(t, "127.0.0.2", c.DbHost)
 	require.Equal(t, "mailsender_test", c.DbName)
 
 	c, err = ParseConfig(`{` +

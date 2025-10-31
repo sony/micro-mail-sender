@@ -1,3 +1,5 @@
+//go:build integration
+
 package mailsender
 
 import (
@@ -51,7 +53,7 @@ func TestMailSendQueue(t *testing.T) {
 	defer tapp.Fini()
 	router := newRouter(tapp.app)
 
-	rr := doRequest(t, router, "POST", "/v3/mail/send",
+	doRequest(t, router, "POST", "/v3/mail/send",
 		`{`+
 			`"personalizations":[`+
 			`  {"to":[{`+
@@ -60,68 +62,68 @@ func TestMailSendQueue(t *testing.T) {
 			`   "subject":"test mail"`+
 			`  }`+
 			`],`+
-			`"from": { "email":"from@exmaple.com" },`+
+			`"from": { "email":"from@example.com" },`+
 			`"content": [`+
 			`  { "type":"text/plain",`+
 			`    "value":"test mail body"`+
 			`  }`+
 			`]`+
 			`}`,
-		http.StatusOK)
-	require.Equal(t, J(`{"result":"ok"}`), jsonBody(t, rr))
+		http.StatusAccepted)
 }
 
 // Remove empty values to make it easier to compare.
 // simplejson doesn't provide a constructor from map[]interface{}, so we strip
 // simplejson and returns internal map.
-func pruneJsonMap(json *simplejson.Json) map[string]interface{} {
+func pruneJSONMap(json *simplejson.Json) map[string]interface{} {
 	m, err := json.Map()
 	if err != nil || m == nil {
 		return nil
 	}
-	x, ok := pruneJsonItem(m).(map[string]interface{})
+	x, ok := pruneJSONItem(m).(map[string]interface{})
 	if !ok {
 		return nil
 	}
 	return x
 }
 
-func pruneJsonItem(x interface{}) interface{} {
+func pruneJSONItem(x interface{}) interface{} {
 	if m, ok := x.(map[string]interface{}); ok {
 		m1 := map[string]interface{}{}
 		for key, val := range m {
 			// these two fields get random values so we
 			// overwrites them
-			if key == "last-update" {
-				m1[key] = "TTT"
-			} else if key == "msg-id" {
+			if key == "last_timestamp" {
+				m1[key] = 0
+			} else if key == "msg_id" {
 				m1[key] = "XXX"
 			} else if val != nil && val != "" && val != "0" {
-				v1 := pruneJsonItem(val)
+				v1 := pruneJSONItem(val)
 				if v1 != nil && v1 != "" && v1 != "0" {
 					m1[key] = v1
 				}
 			}
 		}
+
 		if len(m1) > 0 {
 			return m1
-		} else {
-			return nil
 		}
+
+		return nil
 	}
 	if a, ok := x.([]interface{}); ok {
 		var a1 []interface{}
 		for _, val := range a {
-			v1 := pruneJsonItem(val)
+			v1 := pruneJSONItem(val)
 			if v1 != nil {
 				a1 = append(a1, v1)
 			}
 		}
 		if a1 != nil {
 			return a1
-		} else {
-			return nil
 		}
+
+		return nil
 	}
 	return x
 }
@@ -148,59 +150,57 @@ func TestAppMessages(t *testing.T) {
 		`],` +
 		`"send_at":0` +
 		`}`
+
 	f1 := `{` +
+		`"from_email": "from@example.com",` +
+		`"msg_id":"XXX",` +
+		`"subject":"test mail",` +
+		`"to_email":"to@example.com",` +
 		`"status": "waiting",` +
-		`"last-update":"TTT",` +
-		`"msg-id":"XXX",` +
-		`"request":` + e1 +
-		`}`
-	f2 := `{` +
-		`"status": "waiting",` +
-		`"last-update":"TTT",` +
-		`"msg-id":"XXX"` +
+		`"last_timestamp":0` +
 		`}`
 
-	rr := doRequest(t, router, "POST", "/v3/mail/send", e1,
-		http.StatusOK)
-	require.Equal(t, J(`{"result":"ok"}`), jsonBody(t, rr))
+	doRequest(t, router, "POST", "/v3/mail/send", e1,
+		http.StatusAccepted)
 
-	rr = doRequest(t, router, "GET",
+	rr := doRequest(t, router, "GET",
 		"/v3/messages?query=status%3D%22waiting%22", "",
 		http.StatusOK)
-	require.Equal(t, pruneJsonMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJsonMap(jsonBody(t, rr)))
+
+	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
+		pruneJSONMap(jsonBody(t, rr)))
 
 	rr = doRequest(t, router, "GET",
 		"/v3/messages?query=from_email%3D%22from@example.com%22", "",
 		http.StatusOK)
-	require.Equal(t, pruneJsonMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJsonMap(jsonBody(t, rr)))
+	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
+		pruneJSONMap(jsonBody(t, rr)))
 
 	rr = doRequest(t, router, "GET",
 		"/v3/messages?query=to_email%3D%22to@example.com%22", "",
 		http.StatusOK)
-	require.Equal(t, pruneJsonMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJsonMap(jsonBody(t, rr)))
+	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
+		pruneJSONMap(jsonBody(t, rr)))
 
 	rr = doRequest(t, router, "GET",
 		"/v3/messages?query=from_email!%3D%22from@example.com%22", "",
 		http.StatusOK)
-	require.Equal(t, pruneJsonMap(J(`{"messages":[]}`)),
-		pruneJsonMap(jsonBody(t, rr)))
+	require.Equal(t, pruneJSONMap(J(`{"messages":[]}`)),
+		pruneJSONMap(jsonBody(t, rr)))
 
 	rr = doRequest(t, router, "GET",
 		"/v3/messages?query=from_email%3D%22from@example.com%22%20AND%20to_email%3D%22to@example.com%22", "",
 		http.StatusOK)
-	require.Equal(t, pruneJsonMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJsonMap(jsonBody(t, rr)))
+	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
+		pruneJSONMap(jsonBody(t, rr)))
 
 	// clean message body
 	jb, err := jsonBody(t, rr).Map()
 	require.Nil(t, err)
-	msgid := jb["messages"].([]interface{})[0].(map[string]interface{})["msg-id"]
-	msgid_s, ok := msgid.(string)
+	msgid := jb["messages"].([]interface{})[0].(map[string]interface{})["msg_id"]
+	msgidS, ok := msgid.(string)
 	require.True(t, ok)
-	msg, err := getMessage(tapp.app, msgid_s)
+	msg, err := getMessage(tapp.app, msgidS)
 	require.Nil(t, err)
 	err = msg.cleanMessageBody(tapp.app)
 	require.Nil(t, err)
@@ -209,12 +209,12 @@ func TestAppMessages(t *testing.T) {
 	rr = doRequest(t, router, "GET",
 		"/v3/messages?query=status%3D%22waiting%22", "",
 		http.StatusOK)
-	require.Equal(t, pruneJsonMap(J(`{"messages":[`+f2+`]}`)),
-		pruneJsonMap(jsonBody(t, rr)))
+	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
+		pruneJSONMap(jsonBody(t, rr)))
 
 }
 
-func TestSmtpLog(t *testing.T) {
+func TestSMTPLog(t *testing.T) {
 	tapp := initTestApp(t, &TestConfig{configOverride: `{"host":"localhost",` +
 		`"dbname":"mailsender_test",` +
 		`"smtp-log":"../testdata/mail.log.dummy",` +
@@ -224,7 +224,7 @@ func TestSmtpLog(t *testing.T) {
 	router := newRouter(tapp.app)
 	rr := doRequest(t, router, "GET", "/v3/smtplog?count=5", "",
 		http.StatusOK)
-	require.Equal(t, pruneJsonMap(J(`{"count":5,`+
+	require.Equal(t, pruneJSONMap(J(`{"count":5,`+
 		`"lines":["line 2","line 3","line 4","line 5","line 6"]}`)),
-		pruneJsonMap(jsonBody(t, rr)))
+		pruneJSONMap(jsonBody(t, rr)))
 }
