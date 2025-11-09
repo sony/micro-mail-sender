@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"slices"
 	"strconv"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/gorilla/mux"
 	"go.uber.org/zap"
 )
@@ -100,28 +102,41 @@ func RunServer(config *Config) (err error) {
 	defer func() {
 		err = appendError(err, app.Fini())
 	}()
+
 	server := newServer(app)
-	return server.ListenAndServe()
+	return errors.WithStack(server.ListenAndServe())
+}
+
+func createLogger() (*zap.SugaredLogger, error) {
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return logger.Sugar(), nil
 }
 
 func newApp(config *Config) *App {
-	logger, err := zap.NewDevelopment()
+	logger, err := createLogger()
 	if err != nil {
-		log.Fatalf("can't initialize zap logger: %v", err)
+		log.Fatalf("cannot initialize logger: %+v", err)
 	}
+
 	db, err := newDB(config)
 	if err != nil {
-		log.Fatalf("can't connect to db: %v", err)
+		log.Fatalf("cannot connect to db: %+v", err)
 	}
-	app := &App{config: config,
+
+	return &App{
+		config: config,
 		db:     db,
-		logger: logger.Sugar()}
-	return app
+		logger: logger,
+	}
 }
 
 // Fini closes the DB connection.
 func (app *App) Fini() error {
-	return app.db.Close()
+	return errors.WithStack(app.db.Close())
 }
 
 func newServer(app *App) *http.Server {
@@ -169,13 +184,18 @@ func returnJSON(w http.ResponseWriter, val any) {
 		http.Error(w, jsonParseErrorMessage, http.StatusInternalServerError)
 		return
 	}
+
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write(js)
+	_, err = w.Write(js)
+	if err != nil {
+		http.Error(w, jsonParseErrorMessage, http.StatusInternalServerError)
+		return
+	}
 }
 
 func returnErrWithField(app *App, w http.ResponseWriter, apperr *AppError) {
 	if apperr.Code == 500 {
-		app.logger.Errorw("Returning Internal Error (500):",
+		app.logger.Errorw("internal error (500):",
 			"message", apperr.Message,
 			"error", apperr.Internal)
 
@@ -208,14 +228,13 @@ func returnErrWithField(app *App, w http.ResponseWriter, apperr *AppError) {
 
 func returnErr(app *App, w http.ResponseWriter, apperr *AppError) {
 	if apperr.Code == 500 {
-		app.logger.Errorw("Returning Internal Error (500):",
+		app.logger.Errorw("internal error (500):",
 			"message", apperr.Message,
 			"error", apperr.Internal)
 	} else if apperr.Code >= 400 {
-		app.logger.Infow("Returning Client Error:",
+		app.logger.Infow("client error:",
 			"code", apperr.Code,
 			"message", apperr.Error())
-
 	}
 
 	res := ErrorResponse{
@@ -231,22 +250,22 @@ func returnErr(app *App, w http.ResponseWriter, apperr *AppError) {
 	http.Error(w, string(bodybytes), apperr.Code)
 }
 
+var bearerRegexp = regexp.MustCompile(`Bearer *(.*)`)
+
 func (app *App) checkApikey(r *http.Request) *AppError {
 	auth := r.Header["Authorization"]
 	if len(auth) == 0 {
-		return AppErr(403, "No apikey given")
+		return AppErr(403, "no api key given")
 	}
 
-	key := regexp.MustCompile(`Bearer *(.*)`).ReplaceAllString(auth[0], "$1")
-	for _, id := range app.config.AppIDs {
-		if key == id {
-			return nil
-		}
+	key := bearerRegexp.ReplaceAllString(auth[0], "$1")
+	if slices.Contains(app.config.AppIDs, key) {
+		return nil
 	}
-	return AppErr(403, "Unrecognized apikey")
+
+	return AppErr(403, "unrecognized api key")
 }
 
-// Request handlers
 func (app *App) hHello(w http.ResponseWriter, r *http.Request) {
 	returnJSON(w, map[string]string{"version": "1"})
 }
@@ -254,6 +273,9 @@ func (app *App) hHello(w http.ResponseWriter, r *http.Request) {
 func (app *App) hMailSend(w http.ResponseWriter, r *http.Request) {
 	apperr := app.checkApikey(r)
 	if apperr != nil {
+		if apperr.Internal != nil {
+			app.logger.Errorf("%+v", apperr.Internal)
+		}
 		returnErrWithField(app, w, apperr)
 		return
 	}
@@ -261,25 +283,36 @@ func (app *App) hMailSend(w http.ResponseWriter, r *http.Request) {
 	var req SendRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
+		app.logger.Errorf("%+v", errors.WithStack(err))
 		returnErrWithField(app, w, WrapErr(400, err))
 		return
 	}
 
-	app.logger.Infow("Got MailSend request",
-		"SendRequest", req)
+	app.logger.Infow("got mail/send request",
+		"request", req)
 
 	apperr = enqueueMessage(app, req)
 	if apperr != nil {
+		if apperr.Internal != nil {
+			app.logger.Errorf("%+v", apperr.Internal)
+		}
 		returnErrWithField(app, w, apperr)
 		return
 	}
+
 	w.WriteHeader(http.StatusAccepted)
-	_, _ = w.Write([]byte{})
+	_, err = w.Write([]byte{})
+	if err != nil {
+		app.logger.Errorf("%+v", errors.WithStack(err))
+	}
 }
 
 func (app *App) hMessages(w http.ResponseWriter, r *http.Request) {
 	apperr := app.checkApikey(r)
 	if apperr != nil {
+		if apperr.Internal != nil {
+			app.logger.Errorf("%+v", apperr.Internal)
+		}
 		returnErr(app, w, apperr)
 		return
 	}
@@ -287,11 +320,15 @@ func (app *App) hMessages(w http.ResponseWriter, r *http.Request) {
 	q := r.FormValue("query")
 	lim := r.FormValue("limit")
 
-	app.logger.Infow("Got Messages request",
-		"query", q, "limit", lim)
+	app.logger.Infow("got messages request",
+		"query", q,
+		"limit", lim)
 
 	criteria, apperr := parseQuery(q)
 	if apperr != nil {
+		if apperr.Internal != nil {
+			app.logger.Errorf("%+v", apperr.Internal)
+		}
 		returnErr(app, w, apperr)
 		return
 	}
@@ -301,16 +338,21 @@ func (app *App) hMessages(w http.ResponseWriter, r *http.Request) {
 	if lim != "" {
 		limit, err = strconv.Atoi(lim)
 		if err != nil {
+			app.logger.Errorf("%+v", errors.WithStack(err))
 			returnErr(app, w, WrapErr(400, err))
 			return
 		}
 	}
 
-	app.logger.Debugw("Query parse", "QNode",
-		fmt.Sprintf("%#v", criteria), "limit", limit)
+	app.logger.Debugw("query parse",
+		"qnode", fmt.Sprintf("%#v", criteria),
+		"limit", limit)
 
 	msgs, apperr := searchMessages(app, criteria, limit)
 	if apperr != nil {
+		if apperr.Internal != nil {
+			app.logger.Errorf("%+v", apperr.Internal)
+		}
 		returnErr(app, w, apperr)
 		return
 	}
@@ -321,6 +363,9 @@ func (app *App) hMessages(w http.ResponseWriter, r *http.Request) {
 func (app *App) hSMTPLog(w http.ResponseWriter, r *http.Request) {
 	apperr := app.checkApikey(r)
 	if apperr != nil {
+		if apperr.Internal != nil {
+			app.logger.Errorf("%+v", apperr.Internal)
+		}
 		returnErr(app, w, apperr)
 		return
 	}
@@ -331,6 +376,7 @@ func (app *App) hSMTPLog(w http.ResponseWriter, r *http.Request) {
 	}
 	count, err := strconv.ParseInt(sCount, 10, 64)
 	if err != nil {
+		app.logger.Errorf("%+v", errors.WithStack(err))
 		returnErr(app, w, WrapErr(400, err))
 		return
 	}
@@ -339,6 +385,7 @@ func (app *App) hSMTPLog(w http.ResponseWriter, r *http.Request) {
 
 	file, err := os.Open(logpath)
 	if err != nil {
+		app.logger.Errorf("%+v", errors.WithStack(err))
 		returnErr(app, w, WrapErr(400, err))
 		return
 	}

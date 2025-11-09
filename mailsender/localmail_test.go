@@ -24,3 +24,8 @@ func TestGetFailedMessageID(t *testing.T) {
 	require.Equal(t, "CALN0JNFe31bscLfLs8q4Rkn+Ci94umj6_5+R5b8ABWWxeof4VA@mail.example.com",
 		msgid)
 }
+
+func TestHasNoMail(t *testing.T) {
+	require.True(t, hasNoMail("No mail for xxx"))
+	require.False(t, hasNoMail("mail for xxx"))
+}

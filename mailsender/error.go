@@ -1,6 +1,6 @@
 package mailsender
 
-import "github.com/hashicorp/go-multierror"
+import "github.com/cockroachdb/errors"
 
 // AppError wraps application error with HTTP response code.
 type AppError struct {
@@ -30,5 +30,14 @@ func appendError(err1, err2 error) error {
 	if err1 == nil && err2 == nil {
 		return nil
 	}
-	return multierror.Append(err1, err2)
+
+	if err1 == nil {
+		return err2
+	}
+
+	if err2 == nil {
+		return err1
+	}
+
+	return errors.Join(err1, err2)
 }

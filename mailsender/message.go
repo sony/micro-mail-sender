@@ -8,11 +8,11 @@ import (
 	"mime"
 	"mime/multipart"
 	"net/textproto"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq" // require for Open postgres
 )
@@ -48,7 +48,8 @@ func newDB(config *Config) (*sql.DB, error) {
 	}
 	err = db.Ping()
 	if err != nil {
-		return nil, appendError(err, db.Close())
+		err2 := db.Close()
+		return nil, appendError(errors.WithStack(err), errors.WithStack(err2))
 	}
 	return db, err
 }
@@ -91,7 +92,7 @@ func receiverEmails(req *SendRequest) string {
 func enqueueMessage1(app *App, req SendRequest, tx *sql.Tx) error {
 	b, err := json.Marshal(req)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	packet := string(b)
 	uid := fmt.Sprintf("%s@%s", uuid.New().String(), app.config.MyDomain)
@@ -102,7 +103,7 @@ func enqueueMessage1(app *App, req SendRequest, tx *sql.Tx) error {
 		`values ($1, $2)`,
 		bid, packet)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	subject := req.Subject
@@ -118,7 +119,7 @@ func enqueueMessage1(app *App, req SendRequest, tx *sql.Tx) error {
 		receiverEmails(&req), subject,
 		MessageWaiting, lastUpdate)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -126,21 +127,18 @@ func enqueueMessage1(app *App, req SendRequest, tx *sql.Tx) error {
 func enqueueMessage(app *App, req SendRequest) *AppError {
 	tx, err := app.db.Begin()
 	if err != nil {
-		return WrapErr(500, err)
+		return WrapErr(500, errors.WithStack(err))
 	}
 	for _, r := range expandPersonalization(req) {
 		err = enqueueMessage1(app, r, tx)
 		if err != nil {
 			err2 := tx.Rollback()
-			if err2 != nil {
-				return WrapErr(500, err2)
-			}
-			return WrapErr(500, err)
+			return WrapErr(500, appendError(err, errors.WithStack(err2)))
 		}
 	}
 	err = tx.Commit()
 	if err != nil {
-		return WrapErr(500, err)
+		return WrapErr(500, errors.WithStack(err))
 	}
 	return nil
 }
@@ -151,18 +149,17 @@ func extractMessage(app *App, row *sql.Row) (*Message, error) {
 	var spacket interface{}
 	err := row.Scan(&m.uid, &spacket, &m.status, &m.lastUpdate)
 	if err != nil {
-		if regexp.MustCompile("no rows in result set").
-			MatchString(err.Error()) {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	if spacket == nil {
 		m.packet = SendRequest{}
 	} else {
 		err = json.Unmarshal([]byte(spacket.(string)), &m.packet)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 	}
 	return &m, nil
@@ -190,11 +187,10 @@ func dequeueMessage(app *App) (*Message, error) {
 	var bid string
 	err := row.Scan(&m.uid, &bid, &m.status, &m.lastUpdate)
 	if err != nil {
-		if regexp.MustCompile("no rows in result set").
-			MatchString(err.Error()) {
+		if err == sql.ErrNoRows {
 			return nil, nil
 		}
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	row = app.db.QueryRow(`select packet from bodies `+
 		`where bid = $1`,
@@ -202,18 +198,17 @@ func dequeueMessage(app *App) (*Message, error) {
 	var spacket interface{}
 	err = row.Scan(&spacket)
 	if err != nil {
-		if regexp.MustCompile("no rows in result set").
-			MatchString(err.Error()) {
+		if err == sql.ErrNoRows {
 			spacket = ""
 		}
-		return nil, err
+		return nil, errors.WithStack(err)
 	}
 	if spacket == nil {
 		m.packet = SendRequest{}
 	} else {
 		err = json.Unmarshal([]byte(spacket.(string)), &m.packet)
 		if err != nil {
-			return nil, err
+			return nil, errors.WithStack(err)
 		}
 	}
 	return &m, nil
@@ -227,7 +222,7 @@ func (m *Message) abandonMessage(app *App, errmsg string) error {
 		`where uid = $4`,
 		MessageAbandoned, errmsg, time.Now().Unix(), m.uid)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	return m.cleanMessageBody(app)
 }
@@ -240,7 +235,7 @@ func (m *Message) sentMessage(app *App) error {
 		`where uid = $4`,
 		MessageSent, "", time.Now().Unix(), m.uid)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	return m.cleanMessageBody(app)
 }
@@ -249,7 +244,7 @@ func (m *Message) cleanMessageBody(app *App) (rerr error) {
 	// Remove it only iff no other metadata refers to the body
 	tx, err := app.db.Begin()
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	rows, err := tx.Query(`select uid, bid from messages `+
@@ -258,13 +253,13 @@ func (m *Message) cleanMessageBody(app *App) (rerr error) {
 		m.uid)
 	if err != nil {
 		err2 := tx.Rollback()
-		if err2 != nil {
-			return err2
-		}
-		return err
+		return appendError(errors.WithStack(err), errors.WithStack(err2))
 	}
 	defer func() {
-		rerr = appendError(rerr, rows.Close())
+		err := rows.Close()
+		if err != nil {
+			rerr = appendError(rerr, errors.WithStack(err))
+		}
 	}()
 
 	var uid string
@@ -277,10 +272,7 @@ func (m *Message) cleanMessageBody(app *App) (rerr error) {
 		err = rows.Scan(&uid, &bid)
 		if err != nil {
 			err2 := tx.Rollback()
-			if err2 != nil {
-				return err2
-			}
-			return err
+			return appendError(errors.WithStack(err), errors.WithStack(err2))
 		}
 		count++
 	}
@@ -288,14 +280,14 @@ func (m *Message) cleanMessageBody(app *App) (rerr error) {
 		_, err := tx.Exec(`delete from bodies where bid = $1`, bid)
 		if err != nil {
 			err2 := tx.Rollback()
-			if err2 != nil {
-				return err2
-			}
-			return err
+			return appendError(errors.WithStack(err), errors.WithStack(err2))
 		}
 	}
 	err = tx.Commit()
-	return err
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	return nil
 }
 
 // Searching
@@ -310,17 +302,17 @@ func searchMessages(app *App, criteria QNode, limit int) (msgs []SearchResultIte
 
 	rows, err := app.db.Query(q, params...)
 	if err != nil {
-		return []SearchResultItem{}, WrapErr(500, err)
+		return []SearchResultItem{}, WrapErr(500, errors.WithStack(err))
 	}
 
 	defer func() {
 		e := rows.Close()
 		if e != nil {
 			if apperr != nil {
-				apperr.Internal = appendError(apperr.Internal, e)
+				apperr.Internal = appendError(apperr.Internal, errors.WithStack(e))
 				return
 			}
-			apperr = WrapErr(500, e)
+			apperr = WrapErr(500, errors.WithStack(e))
 		}
 	}()
 
@@ -336,7 +328,7 @@ func searchMessages(app *App, criteria QNode, limit int) (msgs []SearchResultIte
 		status := 0
 		err = rows.Scan(&m.MsgID, &m.FromEmail, &receivers, &m.Subject, &status, &m.LastTimestamp)
 		if err != nil {
-			return []SearchResultItem{}, WrapErr(500, err)
+			return []SearchResultItem{}, WrapErr(500, errors.WithStack(err))
 		}
 
 		m.Status = getStatusString(status)
@@ -487,7 +479,6 @@ func (m *Message) getRecipients() []string {
 	}
 	return rs
 }
-
 func (m *Message) getMultiContents(p Personalization, buf *bytes.Buffer) error {
 	if p.Headers == nil {
 		p.Headers = map[string][]string{}
@@ -518,7 +509,7 @@ func (m *Message) getMultiContents(p Personalization, buf *bytes.Buffer) error {
 			aWriter.Boundary())
 		writer, err := mWriter.CreatePart(mhdr)
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 
 		for _, c := range m.packet.Content {
@@ -529,20 +520,20 @@ func (m *Message) getMultiContents(p Personalization, buf *bytes.Buffer) error {
 			zhdr.Set("Content-Type", c.Type)
 			zwriter, err := aWriter.CreatePart(zhdr)
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 			_, err = zwriter.Write([]byte(c.Value))
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 		}
 		err = aWriter.Close()
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 		_, err = writer.Write([]byte(abuf.Bytes()))
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 
 		for _, a := range m.packet.Attachments {
@@ -553,21 +544,21 @@ func (m *Message) getMultiContents(p Personalization, buf *bytes.Buffer) error {
 			mhdr.Set("Content-Type", a.Type)
 			writer, err := mWriter.CreatePart(mhdr)
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 			_, err = writer.Write([]byte(a.Content))
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 		}
 
 		err = mWriter.Close()
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 		_, err = buf.Write(msg.Bytes())
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	} else {
 		p.Headers["Content-Type"] = []string{
@@ -592,16 +583,16 @@ func (m *Message) getMultiContents(p Personalization, buf *bytes.Buffer) error {
 			mhdr.Set("Content-Type", c.Type)
 			writer, err := mWriter.CreatePart(mhdr)
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 			_, err = writer.Write([]byte(c.Value))
 			if err != nil {
-				return err
+				return errors.WithStack(err)
 			}
 		}
 		err := mWriter.Close()
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 		buf.Write(msg.Bytes())
 	}

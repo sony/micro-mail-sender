@@ -50,6 +50,5 @@ func TestParseConfig(t *testing.T) {
 func TestParseConfigInvalid(t *testing.T) {
 	_, err := ParseConfig(`{`)
 	require.NotNil(t, err)
-	require.Equal(t, "Invalid config file format: unexpected EOF",
-		err.Error())
+	require.Equal(t, "unexpected EOF", err.Error())
 }

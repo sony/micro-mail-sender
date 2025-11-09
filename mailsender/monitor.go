@@ -15,21 +15,17 @@ func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 
 	data, err := mailbox.fetchLocalMail(app)
 	if err != nil {
-		app.logger.Warnw("Failed fetchLocalMail",
-			"err", err)
+		app.logger.Warnf("failed to fetch local mail: %+v", err)
 		return false, 50
 	}
 
 	msg, err := parseLocalMail(app, data)
 	if err != nil {
-		app.logger.Warnw("Failed parseLocalMail",
-			"err", err,
-			"data", string(data))
+		app.logger.Warnw("failed to parse local mail: %+v %s", err, string(data))
 		return false, 50
 	}
 	if msg == nil {
-		// No mail
-		app.logger.Debugw("No mail")
+		app.logger.Debugw("no mail")
 		return false, 500
 	}
 
@@ -37,23 +33,23 @@ func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 	if msgid != "" {
 		m, err := getMessage(app, msgid)
 		if err != nil {
-			app.logger.Warnw("Retrieving message failed",
-				"uid", msgid)
+			app.logger.Warnw("failed to retrieve message: %s %+v", msgid, err)
 			return false, 50
 		}
 		if m == nil {
-			app.logger.Infow("No message corresponding to returned message id",
+			app.logger.Infow("no message corresponding to returned message id",
 				"uid", msgid)
 			return false, 50
 		}
 		err = m.abandonMessage(app, "Undeliverable")
 		if err != nil {
-			app.logger.Warnw("abandonMessage failed", "uid", msgid, "error", err)
+			app.logger.Warnw("failed to abandon message: %s %+v", msgid, err)
 			return false, 50
 		}
 		return true, 50
 	}
-	app.logger.Debugw("Unrelated local mail ignored")
+
+	app.logger.Debugw("ignore unrelated local mail")
 	return false, 50
 }
 

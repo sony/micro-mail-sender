@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"net/smtp"
 	"time"
+
+	"github.com/cockroachdb/errors"
 )
 
 func senderLoop(app *App) {
@@ -11,7 +13,7 @@ func senderLoop(app *App) {
 	for {
 		m, err := dequeueMessage(app)
 		if err != nil {
-			app.logger.Errorw("dequeueMessage failed",
+			app.logger.Errorw("failed to dequeue message",
 				"error", err)
 			waitus = 500
 		} else if m == nil {
@@ -20,7 +22,7 @@ func senderLoop(app *App) {
 			waitus = 50
 			err := sendMesg(app, m)
 			if err != nil {
-				app.logger.Errorw("message send failed",
+				app.logger.Errorw("failed to send message",
 					"error", err)
 			}
 		}
@@ -33,56 +35,47 @@ func runSenderLoop(app *App) {
 }
 
 func sendMesg(app *App, m *Message) error {
-	smtpserver := fmt.Sprintf("localhost:%d", app.config.SMTPPort)
-	err := sendLocal(smtpserver, m)
+	smtpServer := fmt.Sprintf("localhost:%d", app.config.SMTPPort)
+	err := sendLocal(smtpServer, m)
 	if err != nil {
 		e := m.abandonMessage(app, err.Error())
-		if e != nil {
-			app.logger.Errorw("Error on abandoning message",
-				"uid", m.uid,
-				"error", e.Error())
-		}
-		return err
+		return appendError(err, e)
 	}
-	e := m.sentMessage(app)
-	if e != nil {
-		app.logger.Errorw("Error on marking message sent",
-			"uid", m.uid,
-			"error", e.Error())
-		return e
-	}
-	return nil
+	return m.sentMessage(app)
 }
 
-func sendLocal(smtpserver string, m *Message) (rerr error) {
-	clnt, err := smtp.Dial(smtpserver)
+func sendLocal(smtpServer string, m *Message) (rerr error) {
+	clnt, err := smtp.Dial(smtpServer)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 	defer func() {
-		rerr = appendError(rerr, clnt.Quit())
+		err := clnt.Quit()
+		if err != nil {
+			rerr = appendError(rerr, errors.WithStack(err))
+		}
 	}()
 
 	err = clnt.Hello("localhost")
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	err = clnt.Mail(m.packet.From.Email)
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	for _, rcpt := range m.getRecipients() {
 		err = clnt.Rcpt(rcpt)
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 	}
 
 	w, err := clnt.Data()
 	if err != nil {
-		return err
+		return errors.WithStack(err)
 	}
 
 	msg, err := m.getMessageBody()
@@ -93,7 +86,7 @@ func sendLocal(smtpserver string, m *Message) (rerr error) {
 	for {
 		n, err := w.Write(msg[nwritten:])
 		if err != nil {
-			return err
+			return errors.WithStack(err)
 		}
 		if nwritten+n == len(msg) {
 			break
@@ -101,9 +94,5 @@ func sendLocal(smtpserver string, m *Message) (rerr error) {
 		nwritten += n
 	}
 
-	err = w.Close()
-	if err != nil {
-		return err
-	}
-	return
+	return errors.WithStack(w.Close())
 }

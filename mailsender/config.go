@@ -2,9 +2,10 @@ package mailsender
 
 import (
 	"encoding/json"
-	"errors"
 	"os"
 	"strings"
+
+	"github.com/cockroachdb/errors"
 )
 
 // Environment names
@@ -61,7 +62,7 @@ func ParseConfig(configStr string) (*Config, error) {
 	decoder := json.NewDecoder(strings.NewReader(configStr))
 	err := decoder.Decode(config)
 	if err != nil {
-		return nil, errors.New("Invalid config file format: " + err.Error())
+		return nil, errors.WithStack(err)
 	}
 	return overwriteConfigFromEnv(config), nil
 }
