@@ -13,12 +13,15 @@ is_app_ready() {
   echo "ok"
 }
 
+
+mkdir -p tmp && chmod 777 tmp
+
 docker-compose build
 docker-compose down
 
 # make sure ports are available
 
-ports=( "5432" "8333" "8025" )
+ports=( ":5432" ":8333" ":8025" )
 
 for port in "${ports[@]}"
 do

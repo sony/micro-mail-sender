@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/cockroachdb/errors"
 	"go.uber.org/zap"
 )
 
@@ -26,61 +27,59 @@ const (
 // User must be root.
 // Returns true on success, false on failure
 func StartDaemons(config *Config) bool {
-	logger, err := zap.NewDevelopment()
+	logger, err := createLogger()
 	if err != nil {
-		log.Printf("can't initialize zap logger: %v", err)
+		log.Printf("cannot initialize logger: %+v", err)
 		return false
 	}
-	sugar := logger.Sugar()
 
-	if !runSyslog(sugar) {
+	if !runSyslog(logger) {
 		return false
 	}
-	if !runPostfix(sugar, config) {
+
+	if !runPostfix(logger, config) {
 		return false
 	}
+
 	return true
 }
 
-func runSyslog(sugar *zap.SugaredLogger) bool {
-	return runExternalCommand(sugar, []string{"service", "rsyslog", "start"})
+func runSyslog(logger *zap.SugaredLogger) bool {
+	return runExternalCommand(logger, []string{"service", "rsyslog", "start"})
 }
 
-func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
+var tmpLocalRegexp = regexp.MustCompile(`tmp\.local`)
+var relayhostRegexp = regexp.MustCompile(`relayhost = `)
+
+func runPostfix(logger *zap.SugaredLogger, config *Config) bool {
 	err := os.WriteFile(PostOrigin, []byte(config.MyDomain), 0644) // #nosec G306
 	if err != nil {
-		sugar.Errorw("Cannot set up mailname",
-			"path", PostOrigin,
-			"error", err)
+		logger.Errorf("cannot set up mailname: %s %+v", PostOrigin, errors.WithStack(err))
 		return false
 	}
 
 	content, err := os.ReadFile(PostConfigOrig)
 	if err != nil {
-		sugar.Errorw("Cannot read mail.cf.orig",
-			"path", PostConfigOrig,
-			"error", err)
+		logger.Errorf("cannot read mail.cf.orig: %s %+v", PostConfigOrig, errors.WithStack(err))
 		return false
 	}
-	edited := regexp.MustCompile(`tmp\.local`).
-		ReplaceAllString(string(content), config.MyDomain)
+
+	edited := tmpLocalRegexp.ReplaceAllString(string(content), config.MyDomain)
 	if config.RelayHost != "" {
-		edited = regexp.MustCompile(`relayhost = `).ReplaceAllString(edited, fmt.Sprintf("relayhost = %s", config.RelayHost))
+		edited = relayhostRegexp.ReplaceAllString(edited, fmt.Sprintf("relayhost = %s", config.RelayHost))
 	}
 	if config.RelayUser != "" {
 		if err = os.WriteFile(SaslPasswd, []byte(fmt.Sprintf("%s %s:%s\n", config.RelayHost, config.RelayUser, config.RelayPass)), 0600); err != nil {
-			sugar.Errorw("Cannot write sasl_passwd",
-				"path", SaslPasswd,
-				"error", err)
+			logger.Errorf("cannot write sasl_passwd: %+v", errors.WithStack(err))
 			return false
 		}
-		if !runExternalCommand(sugar, []string{"postmap", "hash:/etc/postfix/sasl_passwd"}) {
+		if !runExternalCommand(logger, []string{"postmap", "hash:/etc/postfix/sasl_passwd"}) {
 			return false
 		}
-		if !runExternalCommand(sugar, []string{"apt-get", "update"}) {
+		if !runExternalCommand(logger, []string{"apt-get", "update"}) {
 			return false
 		}
-		if !runExternalCommand(sugar, []string{"apt-get", "install", "-y", "libsasl2-modules"}) {
+		if !runExternalCommand(logger, []string{"apt-get", "install", "-y", "libsasl2-modules"}) {
 			return false
 		}
 	}
@@ -91,13 +90,11 @@ func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
 
 	err = os.WriteFile(PostConfig, []byte(edited), 0644) // #nosec G306
 	if err != nil {
-		sugar.Errorw("Cannot write mail.cf",
-			"path", PostConfig,
-			"error", err)
+		logger.Errorf("cannot write mail.cf: %s %+v", PostConfig, errors.WithStack(err))
 		return false
 	}
 
-	if !runExternalCommand(sugar, []string{"postfix", "start"}) {
+	if !runExternalCommand(logger, []string{"postfix", "start"}) {
 		return false
 	}
 
@@ -108,19 +105,16 @@ func runPostfix(sugar *zap.SugaredLogger, config *Config) bool {
 	return true
 }
 
-func runExternalCommand(sugar *zap.SugaredLogger, argv []string) bool {
+func runExternalCommand(logger *zap.SugaredLogger, argv []string) bool {
 	cmd := exec.Command(argv[0], argv[1:]...) // #nosec G204
 	output, err := cmd.CombinedOutput()
 
 	if err != nil {
-		sugar.Errorw("Command execution failed",
-			"command", argv,
-			"error", err,
-			"output", string(output))
+		logger.Errorf("command execution failed argv: %+v err: %+v output: %s", argv, err, string(output))
 		return false
 	}
 
-	sugar.Infow("Command executed successfully",
+	logger.Infow("Command executed successfully",
 		"command", argv,
 		"output", string(output))
 	return true

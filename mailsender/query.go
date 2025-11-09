@@ -81,9 +81,10 @@ var validQueryKinds = []string{
 
 // Must Correspond to QueryOperator
 var validOperators = []string{"^=", "^!="}
+var skipwsRegexp = regexp.MustCompile(`\s*`)
 
 func skipws(input string) string {
-	idx := regexp.MustCompile(`\s*`).FindStringIndex(input)
+	idx := skipwsRegexp.FindStringIndex(input)
 	return input[idx[1]:]
 
 }
@@ -133,11 +134,13 @@ func parseOperator(input string) (QueryOperator, string, *AppError) {
 	return 0, "", badmsg(input)
 }
 
+var parseValueRegexp1 = regexp.MustCompile(`^"([^"]|\\")*"`)
+var parseValueRegexp2 = regexp.MustCompile(`\\(.)`)
+
 func parseValue(input string) (string, string, *AppError) {
-	idx := regexp.MustCompile(`^"([^"]|\\")*"`).FindStringIndex(input)
+	idx := parseValueRegexp1.FindStringIndex(input)
 	if len(idx) >= 2 {
-		val := regexp.MustCompile(`\\(.)`).
-			ReplaceAllString(input[1:idx[1]-1], "$1")
+		val := parseValueRegexp2.ReplaceAllString(input[1:idx[1]-1], "$1")
 		return val, input[idx[1]:], nil
 	}
 	return "", "", badmsg(input)
