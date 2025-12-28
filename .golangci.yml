@@ -1,3 +1,8 @@
-issues:
-  exclude-files:
-    - mailsender/test_utils
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      - path: "mailsender/test_utils"
+        linters:
+          - "unused"

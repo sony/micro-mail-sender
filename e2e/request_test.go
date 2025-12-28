@@ -29,17 +29,20 @@ func TestE2E(t *testing.T) {
 
 func testSmtplog(t *testing.T) {
 	url := fmt.Sprintf("%s/v3/smtplog?count=1", endpoint)
-
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		panic(err)
 	}
 
 	req.Header.Add("Authorization", "Bearer "+apiKey)
-
 	client := &http.Client{}
 	res, err := client.Do(req)
-	assert.NoError(t, err)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		_ = res.Body.Close()
+	}()
 	assert.Equal(t, 200, res.StatusCode)
 
 	body, err := io.ReadAll(res.Body)
@@ -50,13 +53,14 @@ func testSmtplog(t *testing.T) {
 	resBody := struct {
 		Count int `json:"count"`
 	}{}
-
-	json.Unmarshal(body, &resBody)
+	err = json.Unmarshal(body, &resBody)
+	if err != nil {
+		panic(err)
+	}
 	assert.Equal(t, 1, resBody.Count)
 }
 
 func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
-
 	resBody := struct {
 		Messages []map[string]any `json:"messages"`
 	}{}
@@ -77,7 +81,12 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 
 		client := &http.Client{}
 		res, err := client.Do(req)
-		assert.NoError(t, err)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			_ = res.Body.Close()
+		}()
 		assert.Equal(t, 200, res.StatusCode)
 
 		body, err := io.ReadAll(res.Body)
@@ -85,7 +94,10 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 			panic(err)
 		}
 
-		json.Unmarshal(body, &resBody)
+		err = json.Unmarshal(body, &resBody)
+		if err != nil {
+			panic(err)
+		}
 
 		assert.Equal(t, 1, len(resBody.Messages))
 		msgID = resBody.Messages[0]["msg_id"].(string)
@@ -106,7 +118,12 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 
 		client := &http.Client{}
 		res, err := client.Do(req)
-		assert.NoError(t, err)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			_ = res.Body.Close()
+		}()
 		assert.Equal(t, 200, res.StatusCode)
 
 		body, err := io.ReadAll(res.Body)
@@ -114,7 +131,10 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 			panic(err)
 		}
 
-		json.Unmarshal(body, &resBody)
+		err = json.Unmarshal(body, &resBody)
+		if err != nil {
+			panic(err)
+		}
 
 		assert.Equal(t, 1, len(resBody.Messages))
 	}
@@ -133,7 +153,12 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 
 		client := &http.Client{}
 		res, err := client.Do(req)
-		assert.NoError(t, err)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			_ = res.Body.Close()
+		}()
 		assert.Equal(t, 200, res.StatusCode)
 
 		body, err := io.ReadAll(res.Body)
@@ -141,7 +166,10 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 			panic(err)
 		}
 
-		json.Unmarshal(body, &resBody)
+		err = json.Unmarshal(body, &resBody)
+		if err != nil {
+			panic(err)
+		}
 
 		assert.Equal(t, 1, len(resBody.Messages))
 	}
@@ -160,7 +188,12 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 
 		client := &http.Client{}
 		res, err := client.Do(req)
-		assert.NoError(t, err)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			_ = res.Body.Close()
+		}()
 		assert.Equal(t, 200, res.StatusCode)
 
 		body, err := io.ReadAll(res.Body)
@@ -168,7 +201,11 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 			panic(err)
 		}
 
-		json.Unmarshal(body, &resBody)
+		err = json.Unmarshal(body, &resBody)
+		if err != nil {
+			panic(err)
+		}
+
 		assert.Equal(t, 1, len(resBody.Messages))
 	}
 
@@ -186,7 +223,12 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 
 		client := &http.Client{}
 		res, err := client.Do(req)
-		assert.NoError(t, err)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			_ = res.Body.Close()
+		}()
 		assert.Equal(t, 200, res.StatusCode)
 
 		body, err := io.ReadAll(res.Body)
@@ -194,7 +236,10 @@ func testQueryMessages(t *testing.T, params mailsender.SendRequest) {
 			panic(err)
 		}
 
-		json.Unmarshal(body, &resBody)
+		err = json.Unmarshal(body, &resBody)
+		if err != nil {
+			panic(err)
+		}
 		assert.Equal(t, 1, len(resBody.Messages))
 	}
 
@@ -243,7 +288,12 @@ func testMailSend(t *testing.T) mailsender.SendRequest {
 
 	client := &http.Client{}
 	res, err := client.Do(req)
-	assert.NoError(t, err)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		_ = res.Body.Close()
+	}()
 	assert.Equal(t, http.StatusAccepted, res.StatusCode)
 
 	{
@@ -259,7 +309,12 @@ func testMailSend(t *testing.T) mailsender.SendRequest {
 		}
 		client := &http.Client{}
 		res, err := client.Do(req)
-		assert.NoError(t, err)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			_ = res.Body.Close()
+		}()
 		assert.Equal(t, 200, res.StatusCode)
 
 		body, err := io.ReadAll(res.Body)
@@ -267,7 +322,10 @@ func testMailSend(t *testing.T) mailsender.SendRequest {
 			panic(err)
 		}
 
-		json.Unmarshal(body, &resBody)
+		err = json.Unmarshal(body, &resBody)
+		if err != nil {
+			panic(err)
+		}
 		assert.Equal(t, 1, resBody.Count)
 	}
 

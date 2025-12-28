@@ -3,6 +3,7 @@ package mailsender
 import (
 	"errors"
 	"net"
+	"net/mail"
 	"regexp"
 	"testing"
 
@@ -287,4 +288,42 @@ func removeMultipartBoundaryFromText(text string) string {
 		}
 		text = regexp.MustCompile(submatches[1]).ReplaceAllString(text, "")
 	}
+}
+
+type mockMailboxMgr struct {
+	opt mockMailboxMgrOpt
+}
+
+type mockMailboxMgrOpt struct {
+	hasUnreadLocalMailResult bool
+	failedFetchLocalMail     bool
+	failedParseLocalMail     bool
+	parseLocalMailValue      *mail.Message
+	getFailedMessageIDValue  string
+}
+
+func newMockMailboxManager(opt mockMailboxMgrOpt) mailboxManager {
+	return &mockMailboxMgr{opt: opt}
+}
+
+func (s *mockMailboxMgr) hasUnreadLocalMail(app *App) bool {
+	return s.opt.hasUnreadLocalMailResult
+}
+func (s *mockMailboxMgr) fetchLocalMail(app *App) (data []byte, rerr error) {
+	if s.opt.failedFetchLocalMail {
+		return nil, errors.New("error")
+	}
+
+	return []byte("data"), nil
+}
+
+func (s *mockMailboxMgr) parseLocalMail(app *App, data []byte) (*mail.Message, error) {
+	if s.opt.failedParseLocalMail {
+		return nil, errors.New("error")
+	}
+	return s.opt.parseLocalMailValue, nil
+}
+
+func (s *mockMailboxMgr) getFailedMessageID(app *App, msg *mail.Message) string {
+	return s.opt.getFailedMessageIDValue
 }

@@ -11,22 +11,25 @@ import (
 func senderLoop(app *App) {
 	var waitus int64
 	for {
-		m, err := dequeueMessage(app)
-		if err != nil {
-			app.logger.Errorw("failed to dequeue message",
-				"error", err)
-			waitus = 500
-		} else if m == nil {
-			waitus = 500
-		} else {
-			waitus = 50
-			err := sendMesg(app, m)
+		select {
+		case <-app.quitSenderHandler:
+			return
+		default:
+			m, err := dequeueMessage(app)
 			if err != nil {
-				app.logger.Errorw("failed to send message",
-					"error", err)
+				app.logger.Errorf("failed to dequeue message: %+v", err)
+				waitus = 500
+			} else if m == nil {
+				waitus = 500
+			} else {
+				waitus = 50
+				err := sendMesg(app, m)
+				if err != nil {
+					app.logger.Errorf("failed to send message: %+v", err)
+				}
 			}
+			time.Sleep(time.Duration(waitus) * time.Millisecond)
 		}
-		time.Sleep(time.Duration(waitus) * time.Millisecond)
 	}
 }
 

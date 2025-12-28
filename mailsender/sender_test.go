@@ -4,6 +4,7 @@ package mailsender
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -66,4 +67,16 @@ func TestMessageStatusAfterSend(t *testing.T) {
 	m, err = getMessage(tapp.app, uid)
 	require.Nil(t, err)
 	require.Equal(t, MessageSent, m.status)
+}
+
+func Test_runSenderLoop(t *testing.T) {
+	tapp := initTestBase(t, nil)
+	defer tapp.Fini()
+
+	runSenderLoop(tapp.app)
+	apperr := enqueueMessage(tapp.app, sampleSendRequest(0))
+	require.Nil(t, apperr)
+	time.Sleep(1 * time.Second)
+	tapp.app.quitSenderHandler <- true
+	require.True(t, true)
 }

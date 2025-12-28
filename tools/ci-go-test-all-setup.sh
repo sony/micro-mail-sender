@@ -8,7 +8,7 @@ sudo apt-get install zip postgresql-client mailutils rsyslog -y
 sudo rsyslogd
 
 echo "postfix postfix/main_mailer_type string 'Internet Site'" > tmp.conf 
-echo "postifx postfix/mailname string tmp.local" >> tmp.conf 
+echo "postfix postfix/mailname string tmp.local" >> tmp.conf 
 sudo debconf-set-selections tmp.conf
 
 sudo apt-get install postfix -y
