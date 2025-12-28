@@ -3,10 +3,12 @@ package mailsender
 import (
 	"log"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"os/exec"
 	"os/user"
 	"testing"
+	"time"
 
 	"github.com/chrj/smtpd"
 	"github.com/stretchr/testify/require"
@@ -213,5 +215,101 @@ func TestMonitorMessage(t *testing.T) {
 	m, err = getMessage(tmon.app, tmon.msgid)
 	require.Nil(t, err)
 	require.Equal(t, MessageAbandoned, m.status)
+}
 
+func Test_runMonitorLoop(t *testing.T) {
+	tmon := InitTestMonitor(t)
+	if tmon == nil {
+		t.Skip()
+	}
+	defer tmon.Fini()
+
+	sr := SendRequest{
+		Personalizations: []Personalization{
+			{
+				To: []Addressee{
+					{
+						Email: "nonexistentlocalmailaccount@example.com",
+					},
+				},
+			},
+		},
+		Subject: "test mail",
+		From: Addressee{
+			Email: "me@example.com",
+		},
+		Content: []Content{
+			{
+				Type:  "text/plain",
+				Value: "This is a test mail body",
+			},
+		},
+	}
+
+	apperr := enqueueMessage(tmon.app, sr)
+	require.Nil(t, apperr)
+
+	m, err := dequeueMessage(tmon.app)
+	require.Nil(t, err)
+
+	tmon.msgid = m.uid
+
+	err = sendMesg(tmon.app, m)
+	require.Nil(t, err)
+
+	runMonitorLoop(tmon.app)
+
+	time.Sleep(1 * time.Second)
+
+	tmon.app.quitMonitorHandler <- true
+	require.True(t, true)
+}
+
+func TestMonitor1WithMock(t *testing.T) {
+	tmon := InitTestMonitor(t)
+	if tmon == nil {
+		t.Skip()
+	}
+	defer tmon.Fini()
+	{
+		mailBox := newMockMailboxManager(mockMailboxMgrOpt{hasUnreadLocalMailResult: false})
+		res, code := monitor1(tmon.app, mailBox, 1)
+		require.False(t, res, "false hasUnreadLocalMailResult")
+		require.Equal(t, int64(500), code)
+	}
+
+	{
+		mailBox := newMockMailboxManager(mockMailboxMgrOpt{hasUnreadLocalMailResult: true, failedFetchLocalMail: true})
+		res, code := monitor1(tmon.app, mailBox, 1)
+		require.False(t, res, "error with fetchLocalMail")
+		require.Equal(t, int64(50), code)
+	}
+
+	{
+		mailBox := newMockMailboxManager(mockMailboxMgrOpt{hasUnreadLocalMailResult: true, failedParseLocalMail: true})
+		res, code := monitor1(tmon.app, mailBox, 1)
+		require.False(t, res, "error with parseLocalMail")
+		require.Equal(t, int64(50), code)
+	}
+
+	{
+		mailBox := newMockMailboxManager(mockMailboxMgrOpt{hasUnreadLocalMailResult: true, parseLocalMailValue: nil})
+		res, code := monitor1(tmon.app, mailBox, 1)
+		require.False(t, res, "parseLocalMail value are null")
+		require.Equal(t, int64(500), code)
+	}
+
+	{
+		mailBox := newMockMailboxManager(mockMailboxMgrOpt{hasUnreadLocalMailResult: true, parseLocalMailValue: &mail.Message{}, getFailedMessageIDValue: ""})
+		res, code := monitor1(tmon.app, mailBox, 1)
+		require.False(t, res, "getFailedMessageID value are empty")
+		require.Equal(t, int64(50), code)
+	}
+
+	{
+		mailBox := newMockMailboxManager(mockMailboxMgrOpt{hasUnreadLocalMailResult: true, parseLocalMailValue: &mail.Message{}, getFailedMessageIDValue: "id"})
+		res, code := monitor1(tmon.app, mailBox, 1)
+		require.False(t, res, "getFailedMessageID is not empty")
+		require.Equal(t, int64(50), code)
+	}
 }

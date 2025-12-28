@@ -2,7 +2,7 @@
 
 set -e -x
 
-go_version=1.23.6
+go_version=1.25.5
 go_installed=false
 
 # check goenv is installed but not init
@@ -33,6 +33,8 @@ if command -v goenv &> /dev/null; then
   done
   
   if [ "$go_installed" = false ] ; then
+    echo "install go"
+    bash -c "cd $HOME/.goenv/plugins/go-build/../.. && git checkout master && git pull && cd -"
     echo "goenv install $go_version"
     goenv install $go_version
   fi

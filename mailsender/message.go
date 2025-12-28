@@ -265,10 +265,7 @@ func (m *Message) cleanMessageBody(app *App) (rerr error) {
 	var uid string
 	var bid string
 	count := 0
-	for {
-		if !rows.Next() {
-			break
-		}
+	for rows.Next() {
 		err = rows.Scan(&uid, &bid)
 		if err != nil {
 			err2 := tx.Rollback()
@@ -318,10 +315,7 @@ func searchMessages(app *App, criteria QNode, limit int) (msgs []SearchResultIte
 
 	var ms []SearchResultItem
 
-	for {
-		if !rows.Next() {
-			break
-		}
+	for rows.Next() {
 
 		var m SearchResultItem
 		receivers := ""

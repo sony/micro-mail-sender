@@ -12,6 +12,7 @@ import (
 
 	simplejson "github.com/bitly/go-simplejson"
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,7 +27,10 @@ func doRequest(t *testing.T, router *mux.Router,
 	expectedCode int) *httptest.ResponseRecorder {
 	req, err := http.NewRequest(method, path, strings.NewReader(body))
 	require.Nil(t, err)
-	req.Header["Authorization"] = []string{"Bearer apikey"}
+
+	if expectedCode != http.StatusForbidden {
+		req.Header["Authorization"] = []string{"Bearer apikey"}
+	}
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 	require.Equal(t, expectedCode, rr.Code,
@@ -53,23 +57,35 @@ func TestMailSendQueue(t *testing.T) {
 	defer tapp.Fini()
 	router := newRouter(tapp.app)
 
-	doRequest(t, router, "POST", "/v3/mail/send",
-		`{`+
-			`"personalizations":[`+
-			`  {"to":[{`+
-			`          "email":"to@example.com"`+
-			`         }],`+
-			`   "subject":"test mail"`+
-			`  }`+
-			`],`+
-			`"from": { "email":"from@example.com" },`+
-			`"content": [`+
-			`  { "type":"text/plain",`+
-			`    "value":"test mail body"`+
-			`  }`+
-			`]`+
-			`}`,
-		http.StatusAccepted)
+	{
+		doRequest(t, router, "POST", "/v3/mail/send",
+			`{`+
+				`"personalizations":[`+
+				`  {"to":[{`+
+				`          "email":"to@example.com"`+
+				`         }],`+
+				`   "subject":"test mail"`+
+				`  }`+
+				`],`+
+				`"from": { "email":"from@example.com" },`+
+				`"content": [`+
+				`  { "type":"text/plain",`+
+				`    "value":"test mail body"`+
+				`  }`+
+				`]`+
+				`}`,
+			http.StatusAccepted)
+	}
+
+	{
+		doRequest(t, router, "POST", "/v3/mail/send",
+			`{invalid`,
+			http.StatusBadRequest)
+	}
+
+	{
+		doRequest(t, router, "POST", "/v3/mail/send", `{}`, http.StatusForbidden)
+	}
 }
 
 // Remove empty values to make it easier to compare.
@@ -212,8 +228,10 @@ func TestAppMessages(t *testing.T) {
 	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
 		pruneJSONMap(jsonBody(t, rr)))
 
-}
+	doRequest(t, router, "GET", "/v3/messages?query=very-=invalid=invalid", "", http.StatusBadRequest)
+	doRequest(t, router, "GET", "/v3/messages?query=test", ``, http.StatusForbidden)
 
+}
 func TestSMTPLog(t *testing.T) {
 	tapp := initTestApp(t, &TestConfig{configOverride: `{"host":"localhost",` +
 		`"dbname":"mailsender_test",` +
@@ -227,4 +245,58 @@ func TestSMTPLog(t *testing.T) {
 	require.Equal(t, pruneJSONMap(J(`{"count":5,`+
 		`"lines":["line 2","line 3","line 4","line 5","line 6"]}`)),
 		pruneJSONMap(jsonBody(t, rr)))
+}
+
+func TestHello(t *testing.T) {
+	tapp := initTestApp(t, &TestConfig{configOverride: `{"host":"localhost",` +
+		`"dbname":"mailsender_test",` +
+		`"smtp-log":"../testdata/mail.log.dummy",` +
+		`"api-keys":["apikey"]}`})
+	defer tapp.Fini()
+
+	router := newRouter(tapp.app)
+	rr := doRequest(t, router, "GET", "/", "",
+		http.StatusOK)
+	require.Equal(t, pruneJSONMap(J(`{"version":"1"}`)),
+		pruneJSONMap(jsonBody(t, rr)))
+}
+
+func TestReturnErr(t *testing.T) {
+	tapp := initTestBase(t, nil)
+	defer tapp.Fini()
+
+	{
+		rr := httptest.NewRecorder()
+		returnErr(tapp.app, rr, &AppError{Code: http.StatusInternalServerError})
+		require.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+	}
+
+	{
+		rr := httptest.NewRecorder()
+		returnErr(tapp.app, rr, &AppError{Code: http.StatusBadRequest})
+		require.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
+	}
+}
+
+func Test_newServer(t *testing.T) {
+	tapp := initTestBase(t, nil)
+	defer tapp.Fini()
+	server := newServer(tapp.app)
+	tapp.app.Fini()
+	require.NotNil(t, server)
+}
+
+func Test_newApp(t *testing.T) {
+	{
+		config, err := ParseConfig(`{"host":"localhost","dbname":"mailsender_test"}`)
+		require.Nil(t, err)
+		app := newApp(config)
+		require.NotNil(t, app)
+	}
+
+	{
+		config, err := ParseConfig(`{"dbname":"notfound"}`)
+		require.Nil(t, err)
+		assert.Panics(t, func() { newApp(config) })
+	}
 }

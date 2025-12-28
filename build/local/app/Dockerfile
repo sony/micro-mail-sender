@@ -12,6 +12,7 @@ ENV PATH $PATH:/usr/local/go/bin:/root/go/bin/
 #  air
 RUN go install github.com/air-verse/air@v1.61.7
 
+RUN adduser testuser
 
 WORKDIR /app
 

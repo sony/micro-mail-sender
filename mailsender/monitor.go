@@ -19,9 +19,9 @@ func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 		return false, 50
 	}
 
-	msg, err := parseLocalMail(app, data)
+	msg, err := mailbox.parseLocalMail(app, data)
 	if err != nil {
-		app.logger.Warnw("failed to parse local mail: %+v %s", err, string(data))
+		app.logger.Warnf("failed to parse local mail: %+v %s", err, string(data))
 		return false, 50
 	}
 	if msg == nil {
@@ -29,11 +29,11 @@ func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 		return false, 500
 	}
 
-	msgid := getFailedMessageID(app, msg)
+	msgid := mailbox.getFailedMessageID(app, msg)
 	if msgid != "" {
 		m, err := getMessage(app, msgid)
 		if err != nil {
-			app.logger.Warnw("failed to retrieve message: %s %+v", msgid, err)
+			app.logger.Warnf("failed to retrieve message: %s %+v", msgid, err)
 			return false, 50
 		}
 		if m == nil {
@@ -43,7 +43,7 @@ func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 		}
 		err = m.abandonMessage(app, "Undeliverable")
 		if err != nil {
-			app.logger.Warnw("failed to abandon message: %s %+v", msgid, err)
+			app.logger.Warnf("failed to abandon message: %s %+v", msgid, err)
 			return false, 50
 		}
 		return true, 50
@@ -57,7 +57,12 @@ func monitorLoop(app *App) {
 	waitus := int64(0)
 	mailbox := newMailboxManager()
 	for {
-		_, waitus = monitor1(app, mailbox, waitus)
+		select {
+		case <-app.quitMonitorHandler:
+			return
+		default:
+			_, waitus = monitor1(app, mailbox, waitus)
+		}
 	}
 }
 
