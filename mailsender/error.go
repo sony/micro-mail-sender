@@ -2,7 +2,7 @@ package mailsender
 
 import "github.com/cockroachdb/errors"
 
-// AppError wraps application error with HTTP response code.
+// AppError wraps an application error with an HTTP response code.
 type AppError struct {
 	Code     int    // HTTP response code
 	Message  string // custom message
@@ -22,10 +22,12 @@ func WrapErr(code int, err error) *AppError {
 	return &AppError{Code: code, Message: err.Error(), Internal: err}
 }
 
+// Error returns the error message.
 func (e *AppError) Error() string {
 	return e.Message
 }
 
+// appendError combines two errors into a single error using errors.Join.
 func appendError(err1, err2 error) error {
 	if err1 == nil && err2 == nil {
 		return nil

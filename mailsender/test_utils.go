@@ -1,23 +1,23 @@
 package mailsender
 
 import (
-	"errors"
 	"net"
 	"net/mail"
 	"regexp"
 	"testing"
 
 	"github.com/chrj/smtpd"
+	"github.com/cockroachdb/errors"
 	"github.com/stretchr/testify/require"
 )
 
-// TestConfig test config
+// TestConfig holds configuration options for tests.
 type TestConfig struct {
 	smtpError      bool
 	configOverride string
 }
 
-// TestApp test app
+// TestApp holds the test application state including mock SMTP server.
 type TestApp struct {
 	testConfig   *TestConfig
 	app          *App
@@ -26,7 +26,7 @@ type TestApp struct {
 	sentMails    []*smtpd.Envelope
 }
 
-// Fini finish event
+// Fini stops the mock SMTP server.
 func (a *TestApp) Fini() {
 	a.smtpdStopper <- true
 }
@@ -47,7 +47,7 @@ func (a *TestApp) runSmtpdBackground(addr string) error {
 
 	l, err := net.Listen("tcp", addr)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to listen on address")
 	}
 
 	go func() {

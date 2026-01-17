@@ -11,13 +11,14 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
-// Return true if there're unread mails
+// hasUnreadLocalMail returns true if there are unread mails.
 func hasUnreadLocalMail(app *App) bool {
 	err := exec.Command("/usr/bin/mail", "-e").Run()
 	return err == nil
 }
 
-// Retrieve one mail.  If there's no mail, "No mail for ..." is returned.
+// fetchLocalMail retrieves one mail. If there's no mail, "No mail for ..." is
+// returned.
 func fetchLocalMail(app *App) (data []byte, rerr error) {
 	cmd := exec.Command("/usr/bin/mail")
 
@@ -27,7 +28,6 @@ func fetchLocalMail(app *App) (data []byte, rerr error) {
 	}
 
 	defer func() {
-		// make sure to close.
 		// stdin has already been closed in normal cases.
 		_ = stdin.Close()
 	}()
@@ -38,7 +38,6 @@ func fetchLocalMail(app *App) (data []byte, rerr error) {
 	}
 
 	defer func() {
-		// make sure to close.
 		// stdout has already been closed in normal cases.
 		_ = stdout.Close()
 	}()
@@ -71,15 +70,15 @@ func fetchLocalMail(app *App) (data []byte, rerr error) {
 	return out, nil
 }
 
+// hasNoMail returns true if the text indicates no mail is available.
 func hasNoMail(text string) bool {
 	return strings.HasPrefix(text, "No mail for")
 }
 
 var localMailRegexp = regexp.MustCompile(`(?m)^[A-Za-z0-9-]+: *`)
 
-// Parse
-// The output consists of messages from 'mail' program, followed
-// by the actual message.
+// parseLocalMail parses the output from the 'mail' program. The output consists
+// of messages from 'mail' program, followed by the actual message:
 //
 //	"/var/mail/root": 3 messages 3 new
 //	>N  1 mailer-daemon@example.com ...
@@ -90,8 +89,7 @@ var localMailRegexp = regexp.MustCompile(`(?m)^[A-Za-z0-9-]+: *`)
 //	Received: ....
 //
 // We skip the first part, then parse the rest with net/mail.
-//
-// It can reutrn nil, nil if the data says "No mail for ...".
+// It can return nil, nil if the data says "No mail for ...".
 func parseLocalMail(app *App, data []byte) (*mail.Message, error) {
 	if hasNoMail(string(data)) {
 		return nil, nil
@@ -111,6 +109,9 @@ func parseLocalMail(app *App, data []byte) (*mail.Message, error) {
 
 var messageIDRegexp = regexp.MustCompile(`(?mi)^Message-ID:[ \t]*<(\S*)>$`)
 
+// getFailedMessageID extracts the original message ID from a bounce message.
+// It returns an empty string if the message is not from the mailer daemon or
+// if no message ID is found.
 func getFailedMessageID(app *App, msg *mail.Message) string {
 	from := msg.Header.Get("from")
 	addr, err := mail.ParseAddress(from)

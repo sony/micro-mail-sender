@@ -52,3 +52,41 @@ func TestParseConfigInvalid(t *testing.T) {
 	require.NotNil(t, err)
 	require.Equal(t, "unexpected EOF", err.Error())
 }
+
+func TestParseConfigEmpty(t *testing.T) {
+	c, err := ParseConfig("")
+	require.Nil(t, err)
+	require.Equal(t, "0.0.0.0", c.Host)
+	require.Equal(t, 8333, c.Port)
+	require.Equal(t, "local", c.MyDomain)
+}
+
+func TestOverwriteConfigFromEnv(t *testing.T) {
+	// Set environment variables for testing
+	t.Setenv(EnvDbHost, "testhost")
+	t.Setenv(EnvDbName, "testdb")
+	t.Setenv(EnvDbUser, "testuser")
+	t.Setenv(EnvDbPassword, "testpass")
+	t.Setenv(EnvDbSSLMode, "require")
+
+	c, err := ParseConfig("")
+	require.Nil(t, err)
+
+	require.Equal(t, "testhost", c.DbHost)
+	require.Equal(t, "testdb", c.DbName)
+	require.Equal(t, "testuser", c.DbUser)
+	require.Equal(t, "testpass", c.DbPassword)
+	require.Equal(t, "require", c.DbSSLMode)
+}
+
+func TestOverwriteConfigFromEnvPartial(t *testing.T) {
+	// Only set some environment variables
+	t.Setenv(EnvDbHost, "partialhost")
+
+	c, err := ParseConfig("")
+	require.Nil(t, err)
+
+	require.Equal(t, "partialhost", c.DbHost)
+	require.Equal(t, "mailsender", c.DbName) // Default value
+	require.Equal(t, "ms", c.DbUser)         // Default value
+}

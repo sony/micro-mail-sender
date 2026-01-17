@@ -8,6 +8,7 @@ import (
 	"github.com/cockroachdb/errors"
 )
 
+// senderLoop continuously dequeues and sends messages until signaled to stop.
 func senderLoop(app *App) {
 	var waitus int64
 	for {
@@ -33,10 +34,12 @@ func senderLoop(app *App) {
 	}
 }
 
+// runSenderLoop starts the sender loop in a separate goroutine.
 func runSenderLoop(app *App) {
 	go senderLoop(app)
 }
 
+// sendMesg sends a message via the local SMTP server.
 func sendMesg(app *App, m *Message) error {
 	smtpServer := fmt.Sprintf("localhost:%d", app.config.SMTPPort)
 	err := sendLocal(smtpServer, m)
@@ -47,6 +50,7 @@ func sendMesg(app *App, m *Message) error {
 	return m.sentMessage(app)
 }
 
+// sendLocal sends a message to the specified SMTP server.
 func sendLocal(smtpServer string, m *Message) (rerr error) {
 	clnt, err := smtp.Dial(smtpServer)
 	if err != nil {

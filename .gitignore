@@ -1,5 +1,5 @@
 main/mailsender
 main/main
 tmp/
-tools/sync-from-tractrix.sh
 .DS_Store
+coverage.*
