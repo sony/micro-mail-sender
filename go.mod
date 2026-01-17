@@ -1,6 +1,8 @@
 module github.com/sony/micro-mail-sender
 
-go 1.25.5
+go 1.25
+
+toolchain go1.25.4
 
 require (
 	github.com/bitly/go-simplejson v0.5.0

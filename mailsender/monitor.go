@@ -4,8 +4,8 @@ import (
 	"time"
 )
 
-// try fetch and process one message.  returns a flag whether a mail
-// is processed, and next wait time in us.
+// monitor1 tries to fetch and process one message. It returns a flag indicating
+// whether a mail was processed and the next wait time in milliseconds.
 func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 	time.Sleep(time.Duration(waitus) * time.Millisecond)
 
@@ -53,6 +53,7 @@ func monitor1(app *App, mailbox mailboxManager, waitus int64) (bool, int64) {
 	return false, 50
 }
 
+// monitorLoop continuously monitors for bounce messages until signaled to stop.
 func monitorLoop(app *App) {
 	waitus := int64(0)
 	mailbox := newMailboxManager()
@@ -66,6 +67,7 @@ func monitorLoop(app *App) {
 	}
 }
 
+// runMonitorLoop starts the monitor loop in a separate goroutine.
 func runMonitorLoop(app *App) {
 	go monitorLoop(app)
 }

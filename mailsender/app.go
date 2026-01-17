@@ -1,3 +1,5 @@
+// Package mailsender provides a mail sending service with queue management
+// and SendGrid-compatible API endpoints.
 package mailsender
 
 import (
@@ -20,10 +22,10 @@ import (
 
 const (
 	defaultPort           = 8333
-	jsonParseErrorMessage = `{"errors":[{"message":"fail to parse response body to json"}]}`
+	jsonParseErrorMessage = `{"errors":[{"message":"failed to parse response body to json"}]}`
 )
 
-// App is application
+// App represents the main application state including database connection and logger.
 type App struct {
 	config *Config
 	db     *sql.DB
@@ -33,24 +35,24 @@ type App struct {
 	quitMonitorHandler chan bool
 }
 
-// ErrorResponse is content of error response
+// ErrorResponse represents the JSON structure for error responses.
 type ErrorResponse struct {
 	Errors []Error `json:"errors"`
 }
 
-// Error is error item on response.
+// Error represents an error item in a response.
 type Error struct {
 	Message string  `json:"message"`
 	Field   *string `json:"field,omitempty"`
 }
 
-// Addressee is address of a mail.
+// Addressee represents an email address with an optional display name.
 type Addressee struct {
 	Email string `json:"email"`
 	Name  string `json:"name"`
 }
 
-// Personalization hold Personalization information
+// Personalization holds recipient-specific email information.
 type Personalization struct {
 	To      []Addressee         `json:"to"`
 	Cc      []Addressee         `json:"cc"`
@@ -59,13 +61,13 @@ type Personalization struct {
 	Headers map[string][]string `json:"headers"`
 }
 
-// Content hold content information
+// Content holds the email body content with its MIME type.
 type Content struct {
 	Type  string `json:"type"`  // mime-type
 	Value string `json:"value"` // actual content
 }
 
-// Attachment hold attachment information
+// Attachment holds email attachment information.
 type Attachment struct {
 	Content     string `json:"content"` // base64 encoded content
 	Type        string `json:"type"`    // mime type
@@ -74,7 +76,7 @@ type Attachment struct {
 	ContentID   string `json:"content_id"`
 }
 
-// SendRequest is request body of mail send
+// SendRequest represents the request body for sending an email.
 type SendRequest struct {
 	Personalizations []Personalization `json:"personalizations"`
 	From             Addressee         `json:"from"`
@@ -84,7 +86,7 @@ type SendRequest struct {
 	Attachments      []Attachment      `json:"attachments"`
 }
 
-// SearchResultItem is item of search result item
+// SearchResultItem represents a single message in search results.
 type SearchResultItem struct {
 	FromEmail     string `json:"from_email"`
 	MsgID         string `json:"msg_id"`
@@ -94,7 +96,7 @@ type SearchResultItem struct {
 	LastTimestamp int    `json:"last_timestamp"`
 }
 
-// SearchResult is item of search result
+// SearchResult represents the response body for message search queries.
 type SearchResult struct {
 	Messages []SearchResultItem `json:"messages"`
 }
@@ -110,6 +112,7 @@ func RunServer(config *Config) (err error) {
 	return errors.WithStack(server.ListenAndServe())
 }
 
+// createLogger creates and returns a new development logger.
 func createLogger() (*zap.SugaredLogger, error) {
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -119,6 +122,7 @@ func createLogger() (*zap.SugaredLogger, error) {
 	return logger.Sugar(), nil
 }
 
+// newApp creates a new App instance with the given configuration.
 func newApp(config *Config) *App {
 	logger, err := createLogger()
 	if err != nil {
@@ -139,11 +143,12 @@ func newApp(config *Config) *App {
 	}
 }
 
-// Fini closes the DB connection
+// Fini closes the database connection.
 func (app *App) Fini() error {
 	return errors.WithStack(app.db.Close())
 }
 
+// newServer creates and configures a new HTTP server.
 func newServer(app *App) *http.Server {
 	host := app.config.Host
 	if host == "" {
@@ -171,6 +176,7 @@ func newServer(app *App) *http.Server {
 	}
 }
 
+// newRouter creates and configures the HTTP router with all API endpoints.
 func newRouter(app *App) *mux.Router {
 	router := mux.NewRouter()
 
@@ -183,6 +189,7 @@ func newRouter(app *App) *mux.Router {
 	return router
 }
 
+// returnJSON writes a JSON response to the HTTP response writer.
 func returnJSON(w http.ResponseWriter, val any) {
 	js, err := json.Marshal(val)
 	if err != nil {
@@ -198,6 +205,7 @@ func returnJSON(w http.ResponseWriter, val any) {
 	}
 }
 
+// returnErr writes an error response to the HTTP response writer.
 func returnErr(app *App, w http.ResponseWriter, apperr *AppError) {
 	app.logger.Errorf("error code: %d error: %s %+v", apperr.Code, apperr.Error(), apperr.Internal)
 

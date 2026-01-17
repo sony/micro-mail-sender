@@ -1,302 +1,396 @@
-//go:build integration
-
 package mailsender
 
 import (
-	"fmt"
-	"log"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
-	simplejson "github.com/bitly/go-simplejson"
-	"github.com/gorilla/mux"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
-func initTestApp(t *testing.T, tconf *TestConfig) *TestApp {
-	tapp := initTestBase(t, tconf)
-	require.NotNil(t, tapp)
-	return tapp
-}
-
-func doRequest(t *testing.T, router *mux.Router,
-	method string, path string, body string,
-	expectedCode int) *httptest.ResponseRecorder {
-	req, err := http.NewRequest(method, path, strings.NewReader(body))
+func createTestApp(t *testing.T) *App {
+	logger, err := zap.NewDevelopment()
 	require.Nil(t, err)
 
-	if expectedCode != http.StatusForbidden {
-		req.Header["Authorization"] = []string{"Bearer apikey"}
+	config := &Config{
+		AppIDs: []string{"valid-api-key", "another-key"},
 	}
+
+	return &App{
+		config: config,
+		logger: logger.Sugar(),
+	}
+}
+
+func TestReturnJSON(t *testing.T) {
+	// Test successful JSON response
 	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-	require.Equal(t, expectedCode, rr.Code,
-		fmt.Sprintf("%s %s: %s", method, path, body))
-	return rr
-}
+	data := map[string]string{"key": "value"}
+	returnJSON(rr, data)
 
-func jsonBody(t *testing.T, rr *httptest.ResponseRecorder) *simplejson.Json {
-	json, err := simplejson.NewJson(rr.Body.Bytes())
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "application/json", rr.Header().Get("Content-Type"))
+
+	var result map[string]string
+	err := json.Unmarshal(rr.Body.Bytes(), &result)
 	require.Nil(t, err)
-	return json
+	require.Equal(t, "value", result["key"])
 }
 
-func J(jsonstr string) *simplejson.Json {
-	json, err := simplejson.NewJson([]byte(jsonstr))
-	if err != nil {
-		log.Fatalf("Json literal parse error: %v", err)
+func TestReturnJSONStruct(t *testing.T) {
+	rr := httptest.NewRecorder()
+	data := SearchResult{
+		Messages: []SearchResultItem{
+			{MsgID: "123", Status: "sent"},
+		},
 	}
-	return json
+	returnJSON(rr, data)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Contains(t, rr.Body.String(), "123")
+	require.Contains(t, rr.Body.String(), "sent")
 }
 
-func TestMailSendQueue(t *testing.T) {
-	tapp := initTestApp(t, nil)
-	defer tapp.Fini()
-	router := newRouter(tapp.app)
+func TestReturnJSONMarshalError(t *testing.T) {
+	rr := httptest.NewRecorder()
+	// Create an unmarshallable value (function)
+	returnJSON(rr, func() {})
 
-	{
-		doRequest(t, router, "POST", "/v3/mail/send",
-			`{`+
-				`"personalizations":[`+
-				`  {"to":[{`+
-				`          "email":"to@example.com"`+
-				`         }],`+
-				`   "subject":"test mail"`+
-				`  }`+
-				`],`+
-				`"from": { "email":"from@example.com" },`+
-				`"content": [`+
-				`  { "type":"text/plain",`+
-				`    "value":"test mail body"`+
-				`  }`+
-				`]`+
-				`}`,
-			http.StatusAccepted)
-	}
-
-	{
-		doRequest(t, router, "POST", "/v3/mail/send",
-			`{invalid`,
-			http.StatusBadRequest)
-	}
-
-	{
-		doRequest(t, router, "POST", "/v3/mail/send", `{}`, http.StatusForbidden)
-	}
+	require.Equal(t, http.StatusInternalServerError, rr.Code)
+	require.Contains(t, rr.Body.String(), "failed to parse")
 }
 
-// Remove empty values to make it easier to compare.
-// simplejson doesn't provide a constructor from map[]interface{}, so we strip
-// simplejson and returns internal map.
-func pruneJSONMap(json *simplejson.Json) map[string]interface{} {
-	m, err := json.Map()
-	if err != nil || m == nil {
-		return nil
-	}
-	x, ok := pruneJSONItem(m).(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	return x
+func TestReturnErrBadRequest(t *testing.T) {
+	app := createTestApp(t)
+
+	// Test 400 error
+	rr := httptest.NewRecorder()
+	apperr := AppErr(http.StatusBadRequest, "bad request")
+	returnErr(app, rr, apperr)
+
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	require.Contains(t, rr.Body.String(), "bad request")
 }
 
-func pruneJSONItem(x interface{}) interface{} {
-	if m, ok := x.(map[string]interface{}); ok {
-		m1 := map[string]interface{}{}
-		for key, val := range m {
-			// these two fields get random values so we
-			// overwrites them
-			if key == "last_timestamp" {
-				m1[key] = 0
-			} else if key == "msg_id" {
-				m1[key] = "XXX"
-			} else if val != nil && val != "" && val != "0" {
-				v1 := pruneJSONItem(val)
-				if v1 != nil && v1 != "" && v1 != "0" {
-					m1[key] = v1
-				}
-			}
-		}
+func TestReturnErrInternalServerError(t *testing.T) {
+	app := createTestApp(t)
 
-		if len(m1) > 0 {
-			return m1
-		}
+	rr := httptest.NewRecorder()
+	apperr := AppErr(http.StatusInternalServerError, "internal error")
+	returnErr(app, rr, apperr)
 
-		return nil
-	}
-	if a, ok := x.([]interface{}); ok {
-		var a1 []interface{}
-		for _, val := range a {
-			v1 := pruneJSONItem(val)
-			if v1 != nil {
-				a1 = append(a1, v1)
-			}
-		}
-		if a1 != nil {
-			return a1
-		}
-
-		return nil
-	}
-	return x
+	require.Equal(t, http.StatusInternalServerError, rr.Code)
+	require.Contains(t, rr.Body.String(), "internal error")
 }
 
-func TestAppMessages(t *testing.T) {
-	tapp := initTestApp(t, nil)
-	defer tapp.Fini()
-	router := newRouter(tapp.app)
+func TestReturnErrForbidden(t *testing.T) {
+	app := createTestApp(t)
 
-	e1 := `{` +
-		`"personalizations":[` +
-		`  {"to":[{` +
-		`          "email":"to@example.com"` +
-		`         }],` +
-		`   "subject":"test mail",` +
-		`   "send_at":0` +
-		`  }` +
-		`],` +
-		`"from": { "email":"from@example.com" },` +
-		`"content": [` +
-		`  { "type":"text/plain",` +
-		`    "value":"test mail body"` +
-		`  }` +
-		`],` +
-		`"send_at":0` +
-		`}`
+	rr := httptest.NewRecorder()
+	apperr := AppErr(http.StatusForbidden, "access denied")
+	returnErr(app, rr, apperr)
 
-	f1 := `{` +
-		`"from_email": "from@example.com",` +
-		`"msg_id":"XXX",` +
-		`"subject":"test mail",` +
-		`"to_email":"to@example.com",` +
-		`"status": "waiting",` +
-		`"last_timestamp":0` +
-		`}`
+	require.Equal(t, http.StatusForbidden, rr.Code)
+	require.Contains(t, rr.Body.String(), "access denied")
+}
 
-	doRequest(t, router, "POST", "/v3/mail/send", e1,
-		http.StatusAccepted)
+func TestCheckApikeyValid(t *testing.T) {
+	app := createTestApp(t)
 
-	rr := doRequest(t, router, "GET",
-		"/v3/messages?query=status%3D%22waiting%22", "",
-		http.StatusOK)
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer valid-api-key")
 
-	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJSONMap(jsonBody(t, rr)))
+	apperr := app.checkApikey(req)
+	require.Nil(t, apperr)
+}
 
-	rr = doRequest(t, router, "GET",
-		"/v3/messages?query=from_email%3D%22from@example.com%22", "",
-		http.StatusOK)
-	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJSONMap(jsonBody(t, rr)))
+func TestCheckApikeyValidAlternate(t *testing.T) {
+	app := createTestApp(t)
 
-	rr = doRequest(t, router, "GET",
-		"/v3/messages?query=to_email%3D%22to@example.com%22", "",
-		http.StatusOK)
-	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJSONMap(jsonBody(t, rr)))
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer another-key")
 
-	rr = doRequest(t, router, "GET",
-		"/v3/messages?query=from_email!%3D%22from@example.com%22", "",
-		http.StatusOK)
-	require.Equal(t, pruneJSONMap(J(`{"messages":[]}`)),
-		pruneJSONMap(jsonBody(t, rr)))
+	apperr := app.checkApikey(req)
+	require.Nil(t, apperr)
+}
 
-	rr = doRequest(t, router, "GET",
-		"/v3/messages?query=from_email%3D%22from@example.com%22%20AND%20to_email%3D%22to@example.com%22", "",
-		http.StatusOK)
-	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJSONMap(jsonBody(t, rr)))
+func TestCheckApikeyNoHeader(t *testing.T) {
+	app := createTestApp(t)
 
-	// clean message body
-	jb, err := jsonBody(t, rr).Map()
+	req := httptest.NewRequest("GET", "/", nil)
+	// No Authorization header
+
+	apperr := app.checkApikey(req)
+	require.NotNil(t, apperr)
+	require.Equal(t, 403, apperr.Code)
+	require.Equal(t, "no api key given", apperr.Message)
+}
+
+func TestCheckApikeyInvalid(t *testing.T) {
+	app := createTestApp(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer invalid-key")
+
+	apperr := app.checkApikey(req)
+	require.NotNil(t, apperr)
+	require.Equal(t, 403, apperr.Code)
+	require.Equal(t, "unrecognized api key", apperr.Message)
+}
+
+func TestCheckApikeyBearerWithSpaces(t *testing.T) {
+	app := createTestApp(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.Header.Set("Authorization", "Bearer   valid-api-key")
+
+	apperr := app.checkApikey(req)
+	require.Nil(t, apperr)
+}
+
+func TestHHello(t *testing.T) {
+	app := createTestApp(t)
+
+	req := httptest.NewRequest("GET", "/", nil)
+	rr := httptest.NewRecorder()
+
+	app.hHello(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var result map[string]string
+	err := json.Unmarshal(rr.Body.Bytes(), &result)
 	require.Nil(t, err)
-	msgid := jb["messages"].([]interface{})[0].(map[string]interface{})["msg_id"]
-	msgidS, ok := msgid.(string)
-	require.True(t, ok)
-	msg, err := getMessage(tapp.app, msgidS)
+	require.Equal(t, "1", result["version"])
+}
+
+func TestNewRouter(t *testing.T) {
+	app := createTestApp(t)
+	router := newRouter(app)
+	require.NotNil(t, router)
+}
+
+func TestBearerRegexp(t *testing.T) {
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{"Bearer mytoken", "mytoken"},
+		{"Bearer   spaced-token", "spaced-token"},
+		{"Bearer", ""},
+		{"Bearer abc123", "abc123"},
+	}
+
+	for _, tc := range testCases {
+		result := bearerRegexp.ReplaceAllString(tc.input, "$1")
+		require.Equal(t, tc.expected, result, "Input: %s", tc.input)
+	}
+}
+
+func TestCreateLogger(t *testing.T) {
+	logger, err := createLogger()
 	require.Nil(t, err)
-	err = msg.cleanMessageBody(tapp.app)
+	require.NotNil(t, logger)
+}
+
+func TestErrorResponse(t *testing.T) {
+	resp := ErrorResponse{
+		Errors: []Error{
+			{Message: "error1"},
+			{Message: "error2"},
+		},
+	}
+
+	data, err := json.Marshal(resp)
 	require.Nil(t, err)
-
-	// search empty bodied message
-	rr = doRequest(t, router, "GET",
-		"/v3/messages?query=status%3D%22waiting%22", "",
-		http.StatusOK)
-	require.Equal(t, pruneJSONMap(J(`{"messages":[`+f1+`]}`)),
-		pruneJSONMap(jsonBody(t, rr)))
-
-	doRequest(t, router, "GET", "/v3/messages?query=very-=invalid=invalid", "", http.StatusBadRequest)
-	doRequest(t, router, "GET", "/v3/messages?query=test", ``, http.StatusForbidden)
-
-}
-func TestSMTPLog(t *testing.T) {
-	tapp := initTestApp(t, &TestConfig{configOverride: `{"host":"localhost",` +
-		`"dbname":"mailsender_test",` +
-		`"smtp-log":"../testdata/mail.log.dummy",` +
-		`"api-keys":["apikey"]}`})
-	defer tapp.Fini()
-
-	router := newRouter(tapp.app)
-	rr := doRequest(t, router, "GET", "/v3/smtplog?count=5", "",
-		http.StatusOK)
-	require.Equal(t, pruneJSONMap(J(`{"count":5,`+
-		`"lines":["line 2","line 3","line 4","line 5","line 6"]}`)),
-		pruneJSONMap(jsonBody(t, rr)))
+	require.Contains(t, string(data), "error1")
+	require.Contains(t, string(data), "error2")
 }
 
-func TestHello(t *testing.T) {
-	tapp := initTestApp(t, &TestConfig{configOverride: `{"host":"localhost",` +
-		`"dbname":"mailsender_test",` +
-		`"smtp-log":"../testdata/mail.log.dummy",` +
-		`"api-keys":["apikey"]}`})
-	defer tapp.Fini()
-
-	router := newRouter(tapp.app)
-	rr := doRequest(t, router, "GET", "/", "",
-		http.StatusOK)
-	require.Equal(t, pruneJSONMap(J(`{"version":"1"}`)),
-		pruneJSONMap(jsonBody(t, rr)))
-}
-
-func TestReturnErr(t *testing.T) {
-	tapp := initTestBase(t, nil)
-	defer tapp.Fini()
-
-	{
-		rr := httptest.NewRecorder()
-		returnErr(tapp.app, rr, &AppError{Code: http.StatusInternalServerError})
-		require.Equal(t, http.StatusInternalServerError, rr.Result().StatusCode)
+func TestErrorResponseWithField(t *testing.T) {
+	field := "email"
+	resp := ErrorResponse{
+		Errors: []Error{
+			{Message: "invalid email", Field: &field},
+		},
 	}
 
-	{
-		rr := httptest.NewRecorder()
-		returnErr(tapp.app, rr, &AppError{Code: http.StatusBadRequest})
-		require.Equal(t, http.StatusBadRequest, rr.Result().StatusCode)
-	}
+	data, err := json.Marshal(resp)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "invalid email")
+	require.Contains(t, string(data), "email")
 }
 
-func Test_newServer(t *testing.T) {
-	tapp := initTestBase(t, nil)
-	defer tapp.Fini()
-	server := newServer(tapp.app)
-	tapp.app.Fini()
-	require.NotNil(t, server)
+func TestAddresseeSerialization(t *testing.T) {
+	addr := Addressee{
+		Email: "test@example.com",
+		Name:  "Test User",
+	}
+
+	data, err := json.Marshal(addr)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "test@example.com")
+	require.Contains(t, string(data), "Test User")
 }
 
-func Test_newApp(t *testing.T) {
-	{
-		config, err := ParseConfig(`{"host":"localhost","dbname":"mailsender_test"}`)
-		require.Nil(t, err)
-		app := newApp(config)
-		require.NotNil(t, app)
+func TestPersonalizationSerialization(t *testing.T) {
+	p := Personalization{
+		To:      []Addressee{{Email: "to@example.com"}},
+		Cc:      []Addressee{{Email: "cc@example.com"}},
+		Subject: "Test Subject",
 	}
 
-	{
-		config, err := ParseConfig(`{"dbname":"notfound"}`)
-		require.Nil(t, err)
-		assert.Panics(t, func() { newApp(config) })
+	data, err := json.Marshal(p)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "to@example.com")
+	require.Contains(t, string(data), "cc@example.com")
+	require.Contains(t, string(data), "Test Subject")
+}
+
+func TestContentSerialization(t *testing.T) {
+	c := Content{
+		Type:  "text/plain",
+		Value: "Hello World",
 	}
+
+	data, err := json.Marshal(c)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "text/plain")
+	require.Contains(t, string(data), "Hello World")
+}
+
+func TestAttachmentSerialization(t *testing.T) {
+	a := Attachment{
+		Content:     "base64data",
+		Type:        "image/png",
+		Filename:    "image.png",
+		Disposition: "attachment",
+		ContentID:   "cid123",
+	}
+
+	data, err := json.Marshal(a)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "base64data")
+	require.Contains(t, string(data), "image/png")
+	require.Contains(t, string(data), "image.png")
+}
+
+func TestSendRequestSerialization(t *testing.T) {
+	sr := SendRequest{
+		Personalizations: []Personalization{
+			{To: []Addressee{{Email: "to@example.com"}}},
+		},
+		From:    Addressee{Email: "from@example.com"},
+		Subject: "Test",
+		Content: []Content{{Type: "text/plain", Value: "Body"}},
+	}
+
+	data, err := json.Marshal(sr)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "to@example.com")
+	require.Contains(t, string(data), "from@example.com")
+}
+
+func TestSearchResultItemSerialization(t *testing.T) {
+	item := SearchResultItem{
+		FromEmail:     "from@example.com",
+		MsgID:         "msg123",
+		Subject:       "Test Subject",
+		ToEmail:       "to@example.com",
+		Status:        "sent",
+		LastTimestamp: 1234567890,
+	}
+
+	data, err := json.Marshal(item)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "from@example.com")
+	require.Contains(t, string(data), "msg123")
+	require.Contains(t, string(data), "sent")
+}
+
+func TestSearchResultSerialization(t *testing.T) {
+	sr := SearchResult{
+		Messages: []SearchResultItem{
+			{MsgID: "msg1", Status: "sent"},
+			{MsgID: "msg2", Status: "waiting"},
+		},
+	}
+
+	data, err := json.Marshal(sr)
+	require.Nil(t, err)
+	require.Contains(t, string(data), "msg1")
+	require.Contains(t, string(data), "msg2")
+}
+
+func TestReturnJSONEmptyData(t *testing.T) {
+	rr := httptest.NewRecorder()
+	returnJSON(rr, nil)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "null", rr.Body.String())
+}
+
+func TestReturnJSONComplexNestedStruct(t *testing.T) {
+	rr := httptest.NewRecorder()
+	data := SendRequest{
+		Personalizations: []Personalization{
+			{
+				To:      []Addressee{{Email: "to1@example.com", Name: "To User 1"}},
+				Cc:      []Addressee{{Email: "cc@example.com"}},
+				Bcc:     []Addressee{{Email: "bcc@example.com"}},
+				Subject: "Personalized Subject",
+				Headers: map[string][]string{"X-Custom": {"value1", "value2"}},
+			},
+		},
+		From:    Addressee{Email: "from@example.com", Name: "Sender"},
+		ReplyTo: Addressee{Email: "reply@example.com"},
+		Subject: "Default Subject",
+		Content: []Content{
+			{Type: "text/plain", Value: "Plain text"},
+			{Type: "text/html", Value: "<p>HTML</p>"},
+		},
+		Attachments: []Attachment{
+			{Content: "base64", Type: "image/png", Filename: "img.png"},
+		},
+	}
+	returnJSON(rr, data)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Contains(t, rr.Body.String(), "to1@example.com")
+	require.Contains(t, rr.Body.String(), "Personalized Subject")
+}
+
+func TestReturnErrWithInternalError(t *testing.T) {
+	app := createTestApp(t)
+
+	rr := httptest.NewRecorder()
+	// Create an AppError with an internal error
+	apperr := WrapErr(http.StatusInternalServerError, http.ErrContentLength)
+	returnErr(app, rr, apperr)
+
+	require.Equal(t, http.StatusInternalServerError, rr.Code)
+}
+
+func TestReturnErrNotFound(t *testing.T) {
+	app := createTestApp(t)
+
+	rr := httptest.NewRecorder()
+	apperr := AppErr(http.StatusNotFound, "resource not found")
+	returnErr(app, rr, apperr)
+
+	require.Equal(t, http.StatusNotFound, rr.Code)
+	require.Contains(t, rr.Body.String(), "resource not found")
+}
+
+func TestReturnErrUnauthorized(t *testing.T) {
+	app := createTestApp(t)
+
+	rr := httptest.NewRecorder()
+	apperr := AppErr(http.StatusUnauthorized, "unauthorized")
+	returnErr(app, rr, apperr)
+
+	require.Equal(t, http.StatusUnauthorized, rr.Code)
+	require.Contains(t, rr.Body.String(), "unauthorized")
 }

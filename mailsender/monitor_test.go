@@ -204,7 +204,7 @@ func TestMonitorMessage(t *testing.T) {
 
 	mailBox := newMailboxManager()
 	waitus := int64(100)
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		processed, w := monitor1(tmon.app, mailBox, waitus)
 		if processed {
 			break

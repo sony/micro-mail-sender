@@ -5,50 +5,50 @@ import (
 	"strings"
 )
 
-// QueryType query type
+// QueryType represents the type of a query node.
 type QueryType int
 
 const (
-	// QueryLeaf leaf
+	// QueryLeaf indicates a leaf node in the query tree.
 	QueryLeaf = iota
-	// QueryAnd and
+	// QueryAnd indicates a logical AND operation.
 	QueryAnd
-	// QueryOr or
+	// QueryOr indicates a logical OR operation.
 	QueryOr
 )
 
-// QueryKind Leaf kind
+// QueryKind represents the field to query in a leaf node.
 type QueryKind int
 
 const (
-	// QuerySender sender
+	// QuerySender queries the sender email field.
 	QuerySender = iota
-	// QueryReceiver receiver
+	// QueryReceiver queries the receiver email field.
 	QueryReceiver
-	// QuerySubject subject
+	// QuerySubject queries the subject field.
 	QuerySubject
-	// QueryStatus status
+	// QueryStatus queries the message status field.
 	QueryStatus
-	//QueryMessageID messageID
+	// QueryMessageID queries the message ID field.
 	QueryMessageID
 )
 
-// QueryOperator Leaf operator
+// QueryOperator represents a comparison operator in a leaf node.
 type QueryOperator int
 
 const (
-	// QueryEqual equal
+	// QueryEqual indicates an equality comparison.
 	QueryEqual = iota
-	// QueryEqual not equal
+	// QueryNotEqual indicates an inequality comparison.
 	QueryNotEqual
 )
 
-// QNode node
+// QNode represents a node in the query tree.
 type QNode interface {
 	getType() QueryType
 }
 
-// QExpr exr
+// QExpr represents an expression node combining two query nodes with a logical operator.
 type QExpr struct {
 	qtype QueryType
 	a     QNode
@@ -59,7 +59,7 @@ func (t *QExpr) getType() QueryType {
 	return t.qtype
 }
 
-// QLeaf leaf
+// QLeaf represents a leaf node containing a field comparison.
 type QLeaf struct {
 	kind  QueryKind
 	op    QueryOperator
@@ -83,12 +83,14 @@ var validQueryKinds = []string{
 var validOperators = []string{"^=", "^!="}
 var skipwsRegexp = regexp.MustCompile(`\s*`)
 
+// skipws skips leading whitespace and returns the remaining input.
 func skipws(input string) string {
 	idx := skipwsRegexp.FindStringIndex(input)
 	return input[idx[1]:]
 
 }
 
+// take returns the first n characters of input, adding "..." if truncated.
 func take(input string, n int) string {
 	if len(input) <= n {
 		return input
@@ -96,10 +98,12 @@ func take(input string, n int) string {
 	return input[0:n] + " ..."
 }
 
+// badmsg returns an error indicating an invalid query near the given input.
 func badmsg(input string) *AppError {
 	return AppErr(400, "Invalid query near \""+take(input, 20))
 }
 
+// parseQueryConj parses a query conjunction (AND/OR) from the input.
 func parseQueryConj(input string) (string, string, *AppError) {
 	input = skipws(input)
 	if input == "" {
@@ -114,6 +118,8 @@ func parseQueryConj(input string) (string, string, *AppError) {
 	return "", "", badmsg(input)
 }
 
+// parseQueryKind parses a query field kind (e.g., from_email, to_email) from
+// the input.
 func parseQueryKind(input string) (QueryKind, string, *AppError) {
 	for kind, name := range validQueryKinds {
 		idx := regexp.MustCompile(name).FindStringIndex(input)
@@ -124,6 +130,7 @@ func parseQueryKind(input string) (QueryKind, string, *AppError) {
 	return 0, "", badmsg(input)
 }
 
+// parseOperator parses a comparison operator (= or !=) from the input.
 func parseOperator(input string) (QueryOperator, string, *AppError) {
 	for op, name := range validOperators {
 		idx := regexp.MustCompile(name).FindStringIndex(input)
@@ -137,6 +144,7 @@ func parseOperator(input string) (QueryOperator, string, *AppError) {
 var parseValueRegexp1 = regexp.MustCompile(`^"([^"]|\\")*"`)
 var parseValueRegexp2 = regexp.MustCompile(`\\(.)`)
 
+// parseValue parses a quoted string value from the input.
 func parseValue(input string) (string, string, *AppError) {
 	idx := parseValueRegexp1.FindStringIndex(input)
 	if len(idx) >= 2 {
@@ -146,6 +154,7 @@ func parseValue(input string) (string, string, *AppError) {
 	return "", "", badmsg(input)
 }
 
+// parseQuerySimple parses a simple query expression (field op value).
 func parseQuerySimple(input string) (QNode, string, *AppError) {
 	input = skipws(input)
 	qkind, input, apperr := parseQueryKind(input)
@@ -165,6 +174,7 @@ func parseQuerySimple(input string) (QNode, string, *AppError) {
 	return &QLeaf{kind: qkind, op: operator, value: value}, input, nil
 }
 
+// parseQueryExpr parses a compound query expression with AND/OR conjunctions.
 func parseQueryExpr(input string) (QNode, string, *AppError) {
 	qa, input, apperr := parseQuerySimple(input)
 	if apperr != nil {
@@ -194,7 +204,7 @@ func parseQueryExpr(input string) (QNode, string, *AppError) {
 	}
 }
 
-// Entry point
+// parseQuery parses a query string and returns the corresponding query tree.
 func parseQuery(input string) (QNode, *AppError) {
 	q, _, apperr := parseQueryExpr(input)
 	if apperr != nil {

@@ -1,3 +1,4 @@
+// Package main provides the entry point for the mail sender service.
 package main
 
 import (

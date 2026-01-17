@@ -13,6 +13,7 @@ type mailboxManager interface {
 
 type mailboxMgr struct{}
 
+// newMailboxManager creates a new mailbox manager for monitoring local mail.
 func newMailboxManager() mailboxManager {
 	return &mailboxMgr{}
 }

@@ -18,17 +18,17 @@ import (
 )
 
 const (
-	// MessageWaiting waiting status
+	// MessageWaiting indicates the message is queued and waiting to be sent.
 	MessageWaiting = 0
-	// MessageProcessing processing status
+	// MessageProcessing indicates the message is currently being sent.
 	MessageProcessing = 1
-	// MessageSent sent status
+	// MessageSent indicates the message has been successfully sent.
 	MessageSent = 2
-	// MessageAbandoned abandoned status
+	// MessageAbandoned indicates the message sending was abandoned due to errors.
 	MessageAbandoned = 3
 )
 
-// Message message data
+// Message represents an email message stored in the queue.
 type Message struct {
 	uid        string
 	packet     SendRequest
@@ -36,6 +36,7 @@ type Message struct {
 	lastUpdate int64
 }
 
+// newDB creates a new database connection using the provided configuration.
 func newDB(config *Config) (*sql.DB, error) {
 	connStr := "host=" + config.DbHost +
 		" user=" + config.DbUser +
@@ -44,7 +45,7 @@ func newDB(config *Config) (*sql.DB, error) {
 		" sslmode=" + config.DbSSLMode
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to open database connection")
 	}
 	err = db.Ping()
 	if err != nil {
@@ -54,6 +55,8 @@ func newDB(config *Config) (*sql.DB, error) {
 	return db, err
 }
 
+// expandPersonalization expands a request with multiple personalizations into
+// separate requests, one for each personalization.
 func expandPersonalization(req SendRequest) []SendRequest {
 	var rs []SendRequest
 	for _, p := range req.Personalizations {
@@ -64,9 +67,8 @@ func expandPersonalization(req SendRequest) []SendRequest {
 	return rs
 }
 
-// personalization is already expanded in req
-// returns concatenatino of emails, surrounded by "\x01" for the later
-// substring match.
+// receiverEmails returns a concatenation of emails surrounded by "\x01" for
+// substring matching. Personalization must already be expanded in req.
 func receiverEmails(req *SendRequest) string {
 	var ss []string
 	for _, a := range req.Personalizations[0].To {
@@ -87,8 +89,8 @@ func receiverEmails(req *SendRequest) string {
 	return strings.Join(ss, ",")
 }
 
-// Insert single SendRequest into the queue.  Must be called within
-// transition.
+// enqueueMessage1 inserts a single SendRequest into the queue. Must be called
+// within a transaction.
 func enqueueMessage1(app *App, req SendRequest, tx *sql.Tx) error {
 	b, err := json.Marshal(req)
 	if err != nil {
@@ -124,6 +126,7 @@ func enqueueMessage1(app *App, req SendRequest, tx *sql.Tx) error {
 	return nil
 }
 
+// enqueueMessage adds a send request to the message queue.
 func enqueueMessage(app *App, req SendRequest) *AppError {
 	tx, err := app.db.Begin()
 	if err != nil {
@@ -143,10 +146,11 @@ func enqueueMessage(app *App, req SendRequest) *AppError {
 	return nil
 }
 
-// common routine to extract message.  may return nil message.
+// extractMessage extracts a message from a database row. It may return a nil
+// message if no rows are found.
 func extractMessage(app *App, row *sql.Row) (*Message, error) {
 	var m Message
-	var spacket interface{}
+	var spacket any
 	err := row.Scan(&m.uid, &spacket, &m.status, &m.lastUpdate)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -165,6 +169,7 @@ func extractMessage(app *App, row *sql.Row) (*Message, error) {
 	return &m, nil
 }
 
+// getMessage retrieves a message by its unique ID.
 func getMessage(app *App, uid string) (*Message, error) {
 	row := app.db.QueryRow(`select uid, packet, status, last_update `+
 		`from messages `+
@@ -174,6 +179,7 @@ func getMessage(app *App, uid string) (*Message, error) {
 	return extractMessage(app, row)
 }
 
+// dequeueMessage retrieves and marks a waiting message as processing.
 func dequeueMessage(app *App) (*Message, error) {
 	row := app.db.QueryRow(`update messages set `+
 		`status = $1 `+
@@ -195,7 +201,7 @@ func dequeueMessage(app *App) (*Message, error) {
 	row = app.db.QueryRow(`select packet from bodies `+
 		`where bid = $1`,
 		bid)
-	var spacket interface{}
+	var spacket any
 	err = row.Scan(&spacket)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -214,6 +220,7 @@ func dequeueMessage(app *App) (*Message, error) {
 	return &m, nil
 }
 
+// abandonMessage marks the message as abandoned with the given error message.
 func (m *Message) abandonMessage(app *App, errmsg string) error {
 	_, err := app.db.Exec(`update messages set `+
 		`status = $1, `+
@@ -227,6 +234,7 @@ func (m *Message) abandonMessage(app *App, errmsg string) error {
 	return m.cleanMessageBody(app)
 }
 
+// sentMessage marks the message as successfully sent.
 func (m *Message) sentMessage(app *App) error {
 	_, err := app.db.Exec(`update messages set `+
 		`status = $1, `+
@@ -240,6 +248,7 @@ func (m *Message) sentMessage(app *App) error {
 	return m.cleanMessageBody(app)
 }
 
+// cleanMessageBody removes the message body if no other messages reference it.
 func (m *Message) cleanMessageBody(app *App) (rerr error) {
 	// Remove it only iff no other metadata refers to the body
 	tx, err := app.db.Begin()
@@ -287,10 +296,10 @@ func (m *Message) cleanMessageBody(app *App) (rerr error) {
 	return nil
 }
 
-// Searching
+// searchMessages searches for messages matching the given criteria.
 func searchMessages(app *App, criteria QNode, limit int) (msgs []SearchResultItem, apperr *AppError) {
 	q := `select uid, sender, receivers, subject, status, last_update from messages where `
-	var params []interface{}
+	var params []any
 	conds, params := buildWhereClause(criteria, params)
 	q = q + conds + " order by last_update desc "
 	if limit > 0 {
@@ -337,7 +346,8 @@ func searchMessages(app *App, criteria QNode, limit int) (msgs []SearchResultIte
 	return ms, nil
 }
 
-func buildWhereClause(qn QNode, args []interface{}) (string, []interface{}) {
+// buildWhereClause builds a SQL WHERE clause from a query node.
+func buildWhereClause(qn QNode, args []any) (string, []any) {
 	switch qn.getType() {
 	case QueryLeaf:
 		ql := qn.(*QLeaf)
@@ -364,14 +374,16 @@ func buildWhereClause(qn QNode, args []interface{}) (string, []interface{}) {
 	}
 }
 
-func buildQueryExpr(qe *QExpr, conj string, args []interface{}) (string, []interface{}) {
+// buildQueryExpr builds a SQL expression for a compound query with a conjunction.
+func buildQueryExpr(qe *QExpr, conj string, args []any) (string, []any) {
 	s1, args := buildWhereClause(qe.a, args)
 	s2, args := buildWhereClause(qe.b, args)
 	s := "(" + s1 + " " + conj + " " + s2 + ")"
 	return s, args
 }
 
-func buildQuerySender(ql *QLeaf, args []interface{}) (string, []interface{}) {
+// buildQuerySender builds a SQL condition for sender field queries.
+func buildQuerySender(ql *QLeaf, args []any) (string, []any) {
 	s := "sender "
 	switch ql.op {
 	case QueryEqual:
@@ -383,7 +395,8 @@ func buildQuerySender(ql *QLeaf, args []interface{}) (string, []interface{}) {
 	return s, append(args, ql.value)
 }
 
-func buildQueryReceiver(ql *QLeaf, args []interface{}) (string, []interface{}) {
+// buildQueryReceiver builds a SQL condition for receiver field queries.
+func buildQueryReceiver(ql *QLeaf, args []any) (string, []any) {
 	s := "strpos(receivers, $" + strconv.Itoa(len(args)+1) + ")"
 	switch ql.op {
 	case QueryEqual:
@@ -394,7 +407,8 @@ func buildQueryReceiver(ql *QLeaf, args []interface{}) (string, []interface{}) {
 	return s, append(args, "\x01"+ql.value+"\x01")
 }
 
-func buildQuerySubject(ql *QLeaf, args []interface{}) (string, []interface{}) {
+// buildQuerySubject builds a SQL condition for subject field queries.
+func buildQuerySubject(ql *QLeaf, args []any) (string, []any) {
 	s := "strpos(subject, $" + strconv.Itoa(len(args)+1) + ")"
 	switch ql.op {
 	case QueryEqual:
@@ -405,7 +419,8 @@ func buildQuerySubject(ql *QLeaf, args []interface{}) (string, []interface{}) {
 	return s, append(args, ql.value)
 }
 
-func buildQueryStatus(ql *QLeaf, args []interface{}) (string, []interface{}) {
+// buildQueryStatus builds a SQL condition for status field queries.
+func buildQueryStatus(ql *QLeaf, args []any) (string, []any) {
 	st := 0
 	switch ql.value {
 	case "waiting":
@@ -428,7 +443,8 @@ func buildQueryStatus(ql *QLeaf, args []interface{}) (string, []interface{}) {
 	return s, append(args, st)
 }
 
-func buildQueryMessageID(ql *QLeaf, args []interface{}) (string, []interface{}) {
+// buildQueryMessageID builds a SQL condition for message ID queries.
+func buildQueryMessageID(ql *QLeaf, args []any) (string, []any) {
 	s := "uid "
 	switch ql.op {
 	case QueryEqual:
@@ -440,6 +456,7 @@ func buildQueryMessageID(ql *QLeaf, args []interface{}) (string, []interface{}) 
 	return s, append(args, ql.value)
 }
 
+// getStatusString converts a message status code to its string representation.
 func getStatusString(status int) string {
 	r := "unknown"
 	switch status {
@@ -455,10 +472,7 @@ func getStatusString(status int) string {
 	return r
 }
 
-//
-// Actual sending
-//
-
+// getRecipients returns all recipient email addresses (To, Cc, and Bcc).
 func (m *Message) getRecipients() []string {
 	var rs []string
 	p := m.packet.Personalizations[0]
@@ -473,6 +487,8 @@ func (m *Message) getRecipients() []string {
 	}
 	return rs
 }
+
+// getMultiContents writes multipart MIME content to the buffer.
 func (m *Message) getMultiContents(p Personalization, buf *bytes.Buffer) error {
 	if p.Headers == nil {
 		p.Headers = map[string][]string{}
@@ -593,6 +609,7 @@ func (m *Message) getMultiContents(p Personalization, buf *bytes.Buffer) error {
 	return nil
 }
 
+// getSingleContent writes single-part content to the buffer.
 func (m *Message) getSingleContent(p Personalization, buf *bytes.Buffer) {
 	c := m.packet.Content[0]
 	if c.Type != "" && c.Type != "text/plain" {
@@ -616,6 +633,7 @@ func (m *Message) getSingleContent(p Personalization, buf *bytes.Buffer) {
 	buf.WriteString(c.Value)
 }
 
+// addresseesFieldValue formats a list of addressees for an email header field.
 func (m *Message) addresseesFieldValue(addressees []Addressee) string {
 	items := []string{}
 	for _, addressee := range addressees {
@@ -632,6 +650,7 @@ func (m *Message) addresseesFieldValue(addressees []Addressee) string {
 	return strings.Join(items, ", ")
 }
 
+// getMessageBody constructs and returns the RFC 822 formatted message body.
 func (m *Message) getMessageBody() ([]byte, error) {
 	var buf bytes.Buffer
 	p := m.packet.Personalizations[0]
