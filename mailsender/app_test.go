@@ -394,3 +394,30 @@ func TestReturnErrUnauthorized(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, rr.Code)
 	require.Contains(t, rr.Body.String(), "unauthorized")
 }
+
+// errorWriter is a ResponseWriter that returns an error on Write
+type errorWriter struct {
+	http.ResponseWriter
+	headerWritten bool
+}
+
+func (e *errorWriter) Header() http.Header {
+	return http.Header{}
+}
+
+func (e *errorWriter) WriteHeader(statusCode int) {
+	e.headerWritten = true
+}
+
+func (e *errorWriter) Write(b []byte) (int, error) {
+	return 0, http.ErrContentLength
+}
+
+func TestReturnJSONWriteError(t *testing.T) {
+	// Test that returnJSON handles write errors gracefully
+	ew := &errorWriter{}
+	data := map[string]string{"key": "value"}
+	// This should not panic even though write fails
+	returnJSON(ew, data)
+	// The error path is covered - function returns after http.Error
+}

@@ -2,4 +2,4 @@ main/mailsender
 main/main
 tmp/
 .DS_Store
-coverage.*
+/coverage*

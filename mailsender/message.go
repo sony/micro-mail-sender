@@ -204,13 +204,10 @@ func dequeueMessage(app *App) (*Message, error) {
 	var spacket any
 	err = row.Scan(&spacket)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			spacket = ""
-		}
 		return nil, errors.WithStack(err)
 	}
 	if spacket == nil {
-		m.packet = SendRequest{}
+		return nil, errors.New("message body is missing")
 	} else {
 		err = json.Unmarshal([]byte(spacket.(string)), &m.packet)
 		if err != nil {
