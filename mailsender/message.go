@@ -681,7 +681,9 @@ func (m *Message) getMessageBody() ([]byte, error) {
 		buf.WriteString(m.packet.Subject)
 	}
 	buf.WriteString("\r\n")
-	buf.WriteString(fmt.Sprintf("Message-Id: <%s>\r\n", m.uid))
+
+	mid := fmt.Sprintf("Message-Id: <%s>\r\n", m.uid)
+	buf.WriteString(mid)
 
 	if len(m.packet.Content) > 1 {
 		if err := m.getMultiContents(p, &buf); err != nil {

@@ -2,7 +2,7 @@
 
 set -e -x
 
-go_version=1.25.5
+go_version=1.25.4
 go_installed=false
 
 # check goenv is installed but not init
